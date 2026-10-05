@@ -6,7 +6,7 @@ it was edited, and what a set of targets needs are all read off the log.
 
 from __future__ import annotations
 
-from .record import ACCEPTED, EDITED, Event, Handle, Run
+from .record import EDITED, Event, Handle, Run
 
 
 class Graph:
@@ -33,7 +33,7 @@ class Graph:
 
     def current(self, step: str) -> Run | None:
         """The newest successful run; a failed run never becomes current."""
-        succeeded = [r for r in self.runs_of(step) if r.status == "ok"]
+        succeeded = [r for r in self.runs_of(step) if r.status == 'ok']
         return succeeded[-1] if succeeded else None
 
     def producer(self, handle: Handle) -> Run | None:
@@ -107,16 +107,6 @@ class Graph:
                 upstream = self.producer(handle)
                 if upstream is not None:
                     consumed.add(upstream.step)
-        return [s for s in self.by_step if s not in consumed and self.current(s)]
-
-    def roots(self, targets: list[str]) -> list[str]:
-        """Names of the inputs a replay of these targets must be given."""
-        names = []
-        for step in self.closure(targets):
-            run = self.current(step)
-            for param, handle in run.inputs.items():
-                if self.producer(handle) is None:
-                    name = handle.split("@v")[0] or param
-                    if name not in names:
-                        names.append(name)
-        return names
+        return [
+            s for s in self.by_step if s not in consumed and self.current(s)
+        ]

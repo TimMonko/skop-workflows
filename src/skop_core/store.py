@@ -11,13 +11,13 @@ import json
 import re
 import weakref
 from pathlib import Path
-from typing import Protocol
+from typing import Any, Protocol
 
 import numpy as np
 
 from .record import Event, Handle, Run, from_dict
 
-_HANDLE = re.compile(r"^(?P<path>.+)@v(?P<version>\d+)$")
+_HANDLE = re.compile(r'^(?P<path>.+)@v(?P<version>\d+)$')
 
 
 class Store(Protocol):
@@ -31,6 +31,10 @@ class Store(Protocol):
         """The handle an array already has, or None if the store never saw it."""
         ...
 
+    def describe(self, handle: Handle) -> dict[str, Any]:
+        """What a handle is, without resolving it: its name, ndim and dtype."""
+        ...
+
     def append(self, record: Run | Event) -> None: ...
 
     def records(self) -> list[Run | Event]: ...
@@ -41,8 +45,8 @@ class SimpleStore:
 
     def __init__(self, root: str | Path) -> None:
         self.root = Path(root)
-        (self.root / "arrays").mkdir(parents=True, exist_ok=True)
-        self.log_path = self.root / "log.jsonl"
+        (self.root / 'arrays').mkdir(parents=True, exist_ok=True)
+        self.log_path = self.root / 'log.jsonl'
         self._ids: dict[int, tuple[weakref.ref, Handle]] = {}
 
     # -- arrays ----------------------------------------------------------
@@ -52,7 +56,7 @@ class SimpleStore:
         target = self._array_path(path, version)
         target.parent.mkdir(parents=True, exist_ok=True)
         np.save(target, np.asarray(array))
-        handle = f"{path}@v{version}"
+        handle = f'{path}@v{version}'
         self._remember(array, handle)
         return handle
 
@@ -70,37 +74,42 @@ class SimpleStore:
         # id() is reused after collection, so the weakref is the real check.
         return handle if ref() is array else None
 
+    def describe(self, handle: Handle) -> dict[str, Any]:
+        path, version = self._split(handle)
+        array = np.load(self._array_path(path, version), mmap_mode='r')
+        return {'name': path, 'ndim': array.ndim, 'dtype': str(array.dtype)}
+
     def versions(self, path: str) -> list[Handle]:
-        return [f"{path}@v{v}" for v in self._versions(path)]
+        return [f'{path}@v{v}' for v in self._versions(path)]
 
     # -- records ---------------------------------------------------------
 
     def append(self, record: Run | Event) -> None:
-        with self.log_path.open("a", encoding="utf-8") as stream:
-            stream.write(json.dumps(record.to_dict()) + "\n")
+        with self.log_path.open('a', encoding='utf-8') as stream:
+            stream.write(json.dumps(record.to_dict()) + '\n')
 
     def records(self) -> list[Run | Event]:
         if not self.log_path.exists():
             return []
-        lines = self.log_path.read_text(encoding="utf-8").splitlines()
+        lines = self.log_path.read_text(encoding='utf-8').splitlines()
         return [from_dict(json.loads(line)) for line in lines if line.strip()]
 
     # -- internals -------------------------------------------------------
 
     def _array_path(self, path: str, version: int) -> Path:
-        return self.root / "arrays" / path / f"v{version}.npy"
+        return self.root / 'arrays' / path / f'v{version}.npy'
 
     def _versions(self, path: str) -> list[int]:
-        folder = self.root / "arrays" / path
+        folder = self.root / 'arrays' / path
         if not folder.is_dir():
             return []
-        return sorted(int(p.stem[1:]) for p in folder.glob("v*.npy"))
+        return sorted(int(p.stem[1:]) for p in folder.glob('v*.npy'))
 
     def _split(self, handle: Handle) -> tuple[str, int]:
         match = _HANDLE.match(handle)
         if match is None:
-            raise ValueError(f"{handle!r} is not a handle this store issued")
-        return match["path"], int(match["version"])
+            raise ValueError(f'{handle!r} is not a handle this store issued')
+        return match['path'], int(match['version'])
 
     def _remember(self, array: np.ndarray, handle: Handle) -> None:
         self._ids[id(array)] = (weakref.ref(array), handle)

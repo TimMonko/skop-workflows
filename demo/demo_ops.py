@@ -11,21 +11,25 @@ import numpy as np
 from skop_core import op
 
 
-@op(("image",), array_params=("image",), roles=("image",), cost="cheap")
-def percentile(image: np.ndarray, low: float = 1.0, high: float = 99.8) -> np.ndarray:
+@op(('image',), array_params=('image',), roles=('image',))
+def percentile(
+    image: np.ndarray, low: float = 1.0, high: float = 99.8
+) -> np.ndarray:
     """Rescale so that two percentiles land on 0 and 1."""
     if image.ndim != 2:
-        raise ValueError(f"percentile takes a 2-D image, got {image.ndim} axes")
+        raise ValueError(
+            f'percentile takes a 2-D image, got {image.ndim} axes'
+        )
     lo, hi = np.percentile(image, [low, high])
     span = hi - lo or 1.0
     return np.clip((image - lo) / span, 0.0, 1.0)
 
 
-@op(("image",), array_params=("image",), roles=("image",), cost="expensive")
+@op(('image',), array_params=('image',), roles=('image',))
 def gaussian(image: np.ndarray, sigma: float = 2.0) -> np.ndarray:
     """Blur with a Gaussian kernel, one axis at a time."""
     if sigma <= 0:
-        raise ValueError(f"sigma must be positive, got {sigma}")
+        raise ValueError(f'sigma must be positive, got {sigma}')
     kernel = _kernel(sigma)
     out = image.astype(float)
     for axis in range(out.ndim):
@@ -33,7 +37,7 @@ def gaussian(image: np.ndarray, sigma: float = 2.0) -> np.ndarray:
     return out
 
 
-@op(("image",), array_params=("image",), roles=("labels",), cost="cheap")
+@op(('image',), array_params=('image',), roles=('labels',))
 def otsu(image: np.ndarray, invert: bool = False) -> np.ndarray:
     """Keep what lies above Otsu's threshold."""
     flat = np.asarray(image, dtype=float).ravel()
@@ -64,7 +68,9 @@ def _kernel(sigma: float) -> np.ndarray:
 def _convolve(array: np.ndarray, kernel: np.ndarray, axis: int) -> np.ndarray:
     moved = np.moveaxis(array, axis, -1)
     pad = len(kernel) // 2
-    padded = np.pad(moved, [(0, 0)] * (moved.ndim - 1) + [(pad, pad)], mode="edge")
+    padded = np.pad(
+        moved, [(0, 0)] * (moved.ndim - 1) + [(pad, pad)], mode='edge'
+    )
     out = np.zeros_like(moved)
     for index, weight in enumerate(kernel):
         out += weight * padded[..., index : index + moved.shape[-1]]

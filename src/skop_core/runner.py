@@ -1,4 +1,4 @@
-"""Recording, as a runner that wraps another runner.
+"""Recording, as a layer around a runner.
 
 Nothing here knows about napari, Icechunk or scikit-ops. A host supplies arrays,
 names the step an op's output fills, and gets the result back.
@@ -7,12 +7,13 @@ names the step an op's output fills, and gets the result back.
 from __future__ import annotations
 
 import uuid
-from typing import Any, Callable, Protocol
+from collections.abc import Callable
+from typing import Any, Protocol
 
 import numpy as np
 
-from .graph import Graph
-from .op import info, is_json
+from .derived import Graph
+from .op import OpInfo, info, is_json
 from .record import ACCEPTED, EDITED, Event, Handle, Run
 from .store import Store
 
@@ -38,8 +39,13 @@ def _new_id() -> str:
     return uuid.uuid4().hex[:12]
 
 
-class RecordingRunner:
-    """Wrap a runner so every call becomes a record."""
+class Recorder:
+    """A host's handle on recording: a store, and a runner to execute with.
+
+    Every call of an op goes through :meth:`run`, which records it: array
+    arguments must already have a handle, parameters must be JSON, and the
+    result is saved under the step name before the run is appended.
+    """
 
     def __init__(
         self,
@@ -83,11 +89,13 @@ class RecordingRunner:
         params = {k: v for k, v in args.items() if k not in inputs}
         for name, value in params.items():
             if not is_json(value):
-                raise TypeError(f"{name}={value!r} is not JSON, so it cannot be recorded")
+                raise TypeError(
+                    f'{name}={value!r} is not JSON, so it cannot be recorded'
+                )
 
         try:
             result = self.inner.run(fn, args)
-        except Exception as error:
+        except Exception as error:  # noqa: BLE001 -- a failed run is recorded
             self.store.append(
                 Run(
                     id=_new_id(),
@@ -95,8 +103,8 @@ class RecordingRunner:
                     op=spec.id,
                     inputs=inputs,
                     params=params,
-                    status="failed",
-                    error=f"{type(error).__name__}: {error}",
+                    status='failed',
+                    error=f'{type(error).__name__}: {error}',
                     op_version=self.version,
                 )
             )
@@ -118,32 +126,32 @@ class RecordingRunner:
 
     # -- internals -------------------------------------------------------
 
-    def _inputs(self, spec, args: dict[str, Any]) -> dict[str, Handle]:
+    def _inputs(self, spec: OpInfo, args: dict[str, Any]) -> dict[str, Handle]:
         found = {}
         for name in spec.array_params:
             value = args.get(name)
             if not isinstance(value, np.ndarray):
-                raise TypeError(f"{spec.id} needs an array for {name!r}")
+                raise TypeError(f'{spec.id} needs an array for {name!r}')
             handle = self.store.handle_of(value)
             if handle is None:
                 raise MissingRoot(
-                    f"{name!r} has no handle. Put it in the store first, with "
-                    f"runner.root(...): an array from nowhere is a root, and a "
-                    f"root that is not declared is a broken lineage."
+                    f'{name!r} has no handle. Put it in the store first, with '
+                    f'runner.root(...): an array from nowhere is a root, and a '
+                    f'root that is not declared is a broken lineage.'
                 )
             found[name] = handle
         return found
 
-    def _save(self, spec, step: str, result: Any) -> dict[str, Handle]:
+    def _save(self, spec: OpInfo, step: str, result: Any) -> dict[str, Handle]:
         if len(spec.outputs) == 1:
             return {spec.outputs[0].name: self.store.put(step, result)}
         return {
-            out.name: self.store.put(f"{step}.{out.name}", result[out.name])
+            out.name: self.store.put(f'{step}.{out.name}', result[out.name])
             for out in spec.outputs
         }
 
     def _current_or_raise(self, step: str) -> Run:
         run = self.graph().current(step)
         if run is None:
-            raise KeyError(f"no successful run of {step!r} to mark")
+            raise KeyError(f'no successful run of {step!r} to mark')
         return run

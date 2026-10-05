@@ -1,18 +1,14 @@
 """The small contract an op must satisfy to be recorded.
 
 This stands in for `opspec.OpSpec` until opspec is settled; the fields here are
-the ones opspec already has (id, env, outputs, params) plus the ones it does
-not (cost), so the difference is visible rather than assumed.
+the ones opspec already has (id, env, outputs, params).
 """
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Callable
-
-#: How expensive one run is, which decides whether a stale step updates itself.
-CHEAP = "cheap"
-EXPENSIVE = "expensive"
+from typing import Any
 
 
 @dataclass(frozen=True)
@@ -31,7 +27,6 @@ class OpInfo:
     env: str | None
     outputs: tuple[Output, ...]
     array_params: tuple[str, ...]
-    cost: str = CHEAP
 
     @property
     def is_workflow(self) -> bool:
@@ -40,25 +35,25 @@ class OpInfo:
 
 
 def op(
-    outputs: tuple[str, ...] = ("image",),
+    outputs: tuple[str, ...] = ('image',),
     *,
     env: str | None = None,
-    array_params: tuple[str, ...] = ("image",),
-    cost: str = CHEAP,
+    array_params: tuple[str, ...] = ('image',),
     roles: tuple[str | None, ...] = (),
 ) -> Callable:
     """Declare a function as an op. Sets an attribute and returns the function."""
 
     def decorate(fn: Callable) -> Callable:
-        fn.__skop_op__ = OpInfo(
-            id=f"{fn.__module__}:{fn.__name__}",
+        fn.__skop_op__ = OpInfo(  # pyrefly: ignore [missing-attribute]
+            id=f'{fn.__module__}:{fn.__name__}',
             env=env,
             outputs=tuple(
                 Output(name, role)
-                for name, role in zip(outputs, roles or (None,) * len(outputs))
+                for name, role in zip(
+                    outputs, roles or (None,) * len(outputs), strict=True
+                )
             ),
             array_params=array_params,
-            cost=cost,
         )
         return fn
 
@@ -67,9 +62,9 @@ def op(
 
 def info(fn: Callable) -> OpInfo:
     """The op contract attached to a function."""
-    found = getattr(fn, "__skop_op__", None)
+    found = getattr(fn, '__skop_op__', None)
     if not isinstance(found, OpInfo):
-        raise TypeError(f"{fn!r} is not an op; decorate it with @op")
+        raise TypeError(f'{fn!r} is not an op; decorate it with @op')
     return found
 
 
