@@ -136,7 +136,7 @@ class Recorder:
             if handle is None:
                 raise MissingRoot(
                     f'{name!r} has no handle. Put it in the store first, with '
-                    f'runner.root(...): an array from nowhere is a root, and a '
+                    f'recorder.root(...): an array from nowhere is a root, and a '
                     f'root that is not declared is a broken lineage.'
                 )
             found[name] = handle

@@ -20,17 +20,16 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'src'))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from demo_ops import gaussian, otsu, percentile  # noqa: E402
+from scenario import blobs, session  # noqa: E402
 
 from skop_core import (  # noqa: E402
-    InProcess,
     MissingRoot,
-    Recorder,
-    SimpleStore,
     batch,
     export,
     info,
     replay,
 )
+from skop_visual import to_mermaid, view  # noqa: E402
 
 REGISTRY = {info(fn).id: fn for fn in (percentile, gaussian, otsu)}
 RESULTS: list[bool] = []
@@ -41,26 +40,6 @@ def check(label: str, ok: bool, detail: str = '') -> None:
     print(
         f'  {"PASS" if ok else "FAIL"}  {label}{f"  ({detail})" if detail else ""}'
     )
-
-
-def blobs(
-    shape: tuple[int, int] = (96, 96), seed: int = 0, count: int = 10
-) -> np.ndarray:
-    """A deterministic image of soft round things."""
-    rng = np.random.default_rng(seed)
-    rows, cols = np.mgrid[0 : shape[0], 0 : shape[1]]
-    image = np.zeros(shape, dtype=float)
-    for _ in range(count):
-        cy, cx = rng.uniform(16, shape[0] - 16), rng.uniform(16, shape[1] - 16)
-        radius = rng.uniform(4, 9)
-        image += np.exp(
-            -((rows - cy) ** 2 + (cols - cx) ** 2) / (2 * radius**2)
-        )
-    return image + rng.normal(0.0, 0.01, shape)
-
-
-def session(work: Path, name: str) -> Recorder:
-    return Recorder(SimpleStore(work / name), InProcess(), version='demo 0.1')
 
 
 def main() -> int:
@@ -136,6 +115,16 @@ def main() -> int:
         'an intermediate can be a target',
         set(partial['steps']) == {'normalized', 'smoothed'},
     )
+
+    print('\n7b. the graph view')
+    everything = to_mermaid(view(recorder.graph()))
+    check('the whole session draws the branch', 'smoothed_alt' in everything)
+    drawn = to_mermaid(
+        view(recorder.graph(), store=recorder.store, targets=['labels'])
+    )
+    check('the target view is the closure', 'smoothed_alt' not in drawn)
+    check('the edit is drawn', ':::edited' in drawn)
+    check('the root is drawn once', drawn.count('root image') == 1)
 
     print('\n8. replay on another image, in a store of its own')
     second = session(work, 'replay-second')
