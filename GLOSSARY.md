@@ -24,6 +24,11 @@ _Avoid_: Repository (Icechunk's word), backend, cache
 The append-only set of every run, including discarded trials.
 _Avoid_: History, session
 
+**Graph**:
+The steps and their current runs, derived on demand from the log; what a host
+shows and what a replay selects from.
+_Avoid_: DAG, flowchart
+
 **Step**:
 A position in a recipe, keyed by an op ID together with its output names, that successive runs of that op fill. Re-running with new parameters adds a run to the log and moves the step to it.
 _Avoid_: Node (ambiguous between step and run), task

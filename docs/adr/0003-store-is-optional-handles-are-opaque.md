@@ -2,17 +2,29 @@
 status: proposed
 ---
 
-# Lineage is derived from run records, not from the store's structure
+# The store is optional; handles are opaque
 
-A run records what it consumed, what it produced and its parameters, and the dependency graph is derived from those records. The store is only where the arrays and the records land: Icechunk is one such place, a directory of zarr arrays beside a log file is another. This matters because the store's own history cannot carry the graph anyway: Icechunk snapshots have one parent each, so they cannot express a run with two inputs, and their order records when runs happened rather than what depended on what.
+Where arrays and records land is a choice, not a commitment. The recorder and
+everything above it speak only in **handles**: opaque strings the store issues
+when it takes an array, which nothing outside the store may parse. A store
+answers a small fixed set of questions — take an array, return an array,
+recognise an array it already has, append a record, list the records — and
+describes what a handle refers to. The first store is deliberately plain: a
+directory of `.npy` files beside a JSON Lines log, needing nothing but numpy.
+Icechunk is the second backend, chosen for atomic commits, tags, garbage
+collection and sharing over S3.
 
-## Considered Options
-
-- **Graph as Icechunk branches and ancestry.** Rejected: cannot represent joins, conflates time order with dependency, and ties the model to one storage engine.
-- **A separate mutable graph document kept in the store.** Rejected: a second writer for the same fact, and an old record cannot be edited to repair it.
+For Icechunk to earn its place, the protocol must let a run land in one
+piece: the outputs and the run record committed together, not one snapshot
+per array. The plain store can implement that shape trivially, so it is
+settled now, while only one backend exists.
 
 ## Consequences
 
-- Staleness is derived from the run records rather than stored. An edit, and the acceptance of an edit, are appended as their own records, so the store stays append-only.
-- The recipe is exported separately and carries no data handles, so it does not depend on the store at all.
-- A handle is an opaque string issued by the store. Nothing outside the store parses one, so swapping the store changes no other code.
+- Swapping the store changes no file above `store.py`; a recipe contains no
+  handle, so it is portable between stores.
+- `Store.describe(handle)` names a handle — root name, ndim, dtype — and
+  `export` uses it; no caller splits a handle string.
+- Handle identity for in-memory arrays is the store's record of what it has
+  seen; mutating an array in place breaks it, which is what the edited mark
+  exists for.
