@@ -1,0 +1,122 @@
+"""The graph, derived from the run records.
+
+Nothing here is stored: which run is current, whether a step is stale, whether
+it was edited, and what a set of targets needs are all read off the log.
+"""
+
+from __future__ import annotations
+
+from .record import ACCEPTED, EDITED, Event, Handle, Run
+
+
+class Graph:
+    """The steps a log describes, and the questions a host asks about them."""
+
+    def __init__(self, records: list[Run | Event]) -> None:
+        self.runs = [r for r in records if isinstance(r, Run)]
+        self.events = [e for e in records if isinstance(e, Event)]
+        self.by_step: dict[str, list[Run]] = {}
+        for run in self.runs:
+            self.by_step.setdefault(run.step, []).append(run)
+        self._producer: dict[Handle, Run] = {}
+        for run in self.runs:
+            for handle in run.outputs.values():
+                self._producer[handle] = run
+
+    # -- steps -----------------------------------------------------------
+
+    def steps(self) -> list[str]:
+        return list(self.by_step)
+
+    def runs_of(self, step: str) -> list[Run]:
+        return list(self.by_step.get(step, ()))
+
+    def current(self, step: str) -> Run | None:
+        """The newest successful run; a failed run never becomes current."""
+        succeeded = [r for r in self.runs_of(step) if r.status == "ok"]
+        return succeeded[-1] if succeeded else None
+
+    def producer(self, handle: Handle) -> Run | None:
+        """The run that produced a handle, or None if it is a root."""
+        return self._producer.get(handle)
+
+    def edge(self, run: Run, param: str) -> str | None:
+        """The step a parameter comes from, or None if it is a root."""
+        produced = self.producer(run.inputs[param])
+        return produced.step if produced else None
+
+    # -- derived flags ---------------------------------------------------
+
+    def is_stale(self, step: str) -> bool:
+        run = self.current(step)
+        if run is None:
+            return False
+        for handle in run.inputs.values():
+            upstream = self.producer(handle)
+            if upstream is None:
+                continue
+            if self.current(upstream.step) is not upstream:
+                return True
+        return False
+
+    def is_edited(self, step: str) -> bool:
+        run = self.current(step)
+        if run is None:
+            return False
+        marks = [e for e in self.events if e.run == run.id]
+        return bool(marks) and marks[-1].kind == EDITED
+
+    def is_affected(self, step: str) -> bool:
+        """Whether an edited step feeds this one, directly or not."""
+        return any(
+            other != step and self.is_edited(other)
+            for other in self.closure([step])[:-1]
+        )
+
+    # -- selection -------------------------------------------------------
+
+    def closure(self, targets: list[str]) -> list[str]:
+        """The steps producing the targets, oldest first, and nothing else."""
+        order: list[str] = []
+        seen: set[str] = set()
+
+        def visit(step: str) -> None:
+            if step in seen or step not in self.by_step:
+                return
+            seen.add(step)
+            run = self.current(step)
+            if run is None:
+                # A step whose every run failed produces nothing, so nothing
+                # downstream can be built from it either.
+                return
+            for handle in run.inputs.values():
+                upstream = self.producer(handle)
+                if upstream is not None:
+                    visit(upstream.step)
+            order.append(step)
+
+        for target in targets:
+            visit(target)
+        return order
+
+    def leaves(self) -> list[str]:
+        """Steps no current run consumes: the default targets."""
+        consumed = set()
+        for run in self.runs:
+            for handle in run.inputs.values():
+                upstream = self.producer(handle)
+                if upstream is not None:
+                    consumed.add(upstream.step)
+        return [s for s in self.by_step if s not in consumed and self.current(s)]
+
+    def roots(self, targets: list[str]) -> list[str]:
+        """Names of the inputs a replay of these targets must be given."""
+        names = []
+        for step in self.closure(targets):
+            run = self.current(step)
+            for param, handle in run.inputs.items():
+                if self.producer(handle) is None:
+                    name = handle.split("@v")[0] or param
+                    if name not in names:
+                        names.append(name)
+        return names
