@@ -9,7 +9,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import numpy as np
-from demo_ops import gaussian, otsu, percentile
+from demo_ops import connect, gaussian, otsu, percentile
 
 from skop_core import InProcess, Recorder, SimpleStore
 
@@ -39,7 +39,8 @@ def build(work: Path, name: str = 'graph-demo') -> Recorder:
     """Record the demo's steps 1-7, ready to draw.
 
     Ends in the state the demo cares about: a sigma sweep with one current
-    run, a stale step, a hand edit, and an abandoned branch.
+    run, a stale step, a hand edit, a step downstream of that edit, and an
+    abandoned branch.
     """
     recorder = session(work, name)
     image = blobs(seed=1)
@@ -52,7 +53,8 @@ def build(work: Path, name: str = 'graph-demo') -> Recorder:
     smoothed = recorder.run(
         gaussian, 'smoothed', {'image': normalized, 'sigma': 18.0}
     )
-    recorder.run(otsu, 'labels', {'image': smoothed})
+    labels = recorder.run(otsu, 'labels', {'image': smoothed})
+    recorder.run(connect, 'components', {'labels': labels})
     recorder.run(gaussian, 'smoothed', {'image': normalized, 'sigma': 2.0})
     recorder.mark_edited('labels', 'painted two cells')
     recorder.run(gaussian, 'smoothed_alt', {'image': normalized, 'sigma': 9.0})

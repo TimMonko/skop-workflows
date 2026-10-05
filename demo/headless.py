@@ -19,7 +19,7 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'src'))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from demo_ops import gaussian, otsu, percentile  # noqa: E402
+from demo_ops import connect, gaussian, otsu, percentile  # noqa: E402
 from scenario import blobs, session  # noqa: E402
 
 from skop_core import (  # noqa: E402
@@ -63,7 +63,7 @@ def main() -> int:
     smoothed = recorder.run(
         gaussian, 'smoothed', {'image': normalized, 'sigma': 18.0}
     )
-    recorder.run(otsu, 'labels', {'image': smoothed})
+    labels = recorder.run(otsu, 'labels', {'image': smoothed})
     graph = recorder.graph()
     check('one step, three runs', len(graph.runs_of('smoothed')) == 3)
     check(
@@ -91,6 +91,12 @@ def main() -> int:
         check('an undeclared array is refused', 'has no handle' in str(error))
     else:
         check('an undeclared array is refused', False)
+
+    print('\n6b. a step downstream of the edit')
+    recorder.run(connect, 'components', {'labels': labels})
+    graph = recorder.graph()
+    check('the downstream step is affected', graph.is_affected('components'))
+    check('and not edited itself', not graph.is_edited('components'))
 
     print('\n7. a branch that was tried and abandoned')
     recorder.run(gaussian, 'smoothed_alt', {'image': normalized, 'sigma': 9.0})
@@ -125,6 +131,10 @@ def main() -> int:
     check('the target view is the closure', 'smoothed_alt' not in drawn)
     check('the edit is drawn', ':::edited' in drawn)
     check('the root is drawn once', drawn.count('root image') == 1)
+    downstream = to_mermaid(
+        view(recorder.graph(), store=recorder.store, targets=['components'])
+    )
+    check('an affected step is drawn', ':::affected' in downstream)
 
     print('\n8. replay on another image, in a store of its own')
     second = session(work, 'replay-second')

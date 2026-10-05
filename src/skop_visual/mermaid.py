@@ -7,7 +7,7 @@ the interactive home for it.
 
 from __future__ import annotations
 
-from .model import GraphView
+from .model import SIGNALS, GraphView
 
 _CLASS_DEFS = (
     'classDef fresh fill:#e6f4ea,stroke:#137333,color:#137333',
@@ -29,10 +29,12 @@ def to_mermaid(view: GraphView) -> str:
     lines = ['flowchart TB']
     roots: dict[str, str] = {}
     for node in view.nodes:
+        signal = SIGNALS[node.badge]
         count = len(node.runs)
-        badge = node.badge if count == 1 else f'{node.badge} · {count} runs'
+        if count > 1:
+            signal = f'{signal} · {count} runs'
         short = node.op.rsplit(':', 1)[-1]
-        label = f'{_label(node.step)}<br/>{_label(short)}<br/>{badge}'
+        label = f'{_label(node.step)}<br/>{_label(short)}<br/>{signal}'
         lines.append(f'    {ids[node.step]}["{label}"]:::{node.badge}')
     for edge in view.edges:
         if edge.target not in ids:

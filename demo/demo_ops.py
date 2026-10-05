@@ -58,6 +58,33 @@ def otsu(image: np.ndarray, invert: bool = False) -> np.ndarray:
     return mask <= threshold if invert else mask > threshold
 
 
+@op(('components',), array_params=('labels',), roles=('labels',))
+def connect(labels: np.ndarray) -> np.ndarray:
+    """Number the connected components of a mask, four-connected."""
+    mask = np.asarray(labels, dtype=bool)
+    out = np.zeros(mask.shape, dtype=np.int32)
+    rows, cols = mask.shape
+    count = 0
+    for row in range(rows):
+        for col in range(cols):
+            if not mask[row, col] or out[row, col]:
+                continue
+            count += 1
+            stack = [(row, col)]
+            while stack:
+                y, x = stack.pop()
+                if not (0 <= y < rows and 0 <= x < cols):
+                    continue
+                if not mask[y, x] or out[y, x]:
+                    continue
+                out[y, x] = count
+                stack.append((y - 1, x))
+                stack.append((y + 1, x))
+                stack.append((y, x - 1))
+                stack.append((y, x + 1))
+    return out
+
+
 def _kernel(sigma: float) -> np.ndarray:
     radius = max(1, int(round(3 * sigma)))
     offsets = np.arange(-radius, radius + 1, dtype=float)

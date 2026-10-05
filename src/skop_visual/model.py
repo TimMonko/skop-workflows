@@ -21,6 +21,15 @@ AFFECTED = 'affected'
 EDITED = 'edited'
 FAILED = 'failed'
 
+#: A quick visual signal per badge, for graph labels and panels.
+SIGNALS = {
+    FRESH: '✅ fresh',
+    STALE: '⏳ stale',
+    AFFECTED: '⚠️ affected',
+    EDITED: '✏️ edited',
+    FAILED: '❌ failed',
+}
+
 
 @dataclass(frozen=True)
 class Edge:
@@ -31,6 +40,8 @@ class Edge:
     source: str | None
     #: The step this edge feeds.
     target: str
+    #: The store's handle for the data, for a host that wants to load it.
+    handle: str | None = None
     #: The root's name, when a store could describe the handle.
     root: str | None = None
 
@@ -97,6 +108,7 @@ def view(
                     param=param,
                     source=source,
                     target=run.step,
+                    handle=handle,
                     root=None if source is not None else root_name(handle),
                 )
             )

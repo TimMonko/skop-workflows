@@ -4,10 +4,10 @@ Run it with:
 
     uv run marimo run notebooks/graph.py
 
-A demo session is recorded into a temporary store, then the graph view is
-drawn: the Mermaid diagram, a target picker (empty shows the whole session;
-choosing steps keeps only their closure, the rule export uses), and a panel
-for one step's runs, parameters and handles.
+A demo session is recorded into a temporary store, then drawn: the Mermaid
+diagram beside a panel for the chosen step, with tiny previews of the arrays
+its current run consumed and produced. Targets prune the diagram to their
+closure, the rule export uses.
 """
 
 import marimo
@@ -39,12 +39,47 @@ def _(Path):
 
     from scenario import build
 
-    from skop_visual import to_mermaid, view
+    from skop_visual import SIGNALS, to_mermaid, view
 
     work = Path(tempfile.mkdtemp(prefix='skop-graph-'))
     recorder = build(work)
     everything = view(recorder.graph(), store=recorder.store)
-    return (everything, recorder, to_mermaid, view)
+    return (SIGNALS, everything, recorder, to_mermaid, view)
+
+
+@app.cell
+def _(mo):
+    from io import BytesIO
+
+    import matplotlib
+    import numpy as np
+
+    matplotlib.use('Agg')
+
+    from matplotlib import pyplot as plt
+
+    def thumbnail(array):
+        """A tiny image of one 2-D array; stacks show their middle plane."""
+        data = np.asarray(array)
+        while data.ndim > 2:
+            data = data[data.shape[0] // 2]
+        step = max(1, max(data.shape) // 256)
+        data = data[::step, ::step]
+        if np.issubdtype(data.dtype, np.floating):
+            colormap = 'magma'
+        elif np.issubdtype(data.dtype, np.bool_):
+            colormap = 'gray'
+        else:
+            colormap = 'turbo'
+        figure, axes = plt.subplots(figsize=(1.4, 1.4), dpi=90)
+        axes.imshow(data, cmap=colormap, interpolation='nearest')
+        axes.set_axis_off()
+        buffer = BytesIO()
+        figure.savefig(buffer, format='png', bbox_inches='tight', pad_inches=0)
+        plt.close(figure)
+        return mo.image(buffer.getvalue(), width=96)
+
+    return (thumbnail,)
 
 
 @app.cell
@@ -65,8 +100,7 @@ def _(mo, recorder, targets, to_mermaid, view):
         targets=targets.value or None,
     )
     diagram = mo.mermaid(to_mermaid(picture))
-    diagram
-    return (picture,)
+    return (diagram, picture)
 
 
 @app.cell
@@ -80,46 +114,81 @@ def _(mo, picture):
 
 
 @app.cell
-def _(mo, picture, picker):
-    import json
-
+def _(SIGNALS, mo, picture, picker):
     node = next(
         (n for n in picture.nodes if n.step == picker.value),
         picture.nodes[0],
     )
-    current = next((r for r in node.runs if r.current), None)
-    lines = [
-        f'### {node.step}',
-        (
-            f'`{node.op}` · badge **{node.badge}** · '
-            f'flags: {", ".join(node.flags) or "none"}'
-        ),
-    ]
+    flags = (
+        ' · '.join(SIGNALS[flag] for flag in node.flags) or SIGNALS['fresh']
+    )
+    count = len(node.runs)
+    header = mo.md(
+        f'### {node.step}\n'
+        f'`{node.op}`\n\n'
+        f'{flags} · {count} run{"" if count == 1 else "s"}'
+    )
+    return (header, node)
+
+
+@app.cell
+def _(header, mo, node, recorder, thumbnail):
+    current = next((run for run in node.runs if run.current), None)
+    previews = []
     if current is not None:
-        params = ', '.join(f'{k}={v}' for k, v in current.params.items())
-        lines.append(f'params: {params or "none"}')
         for edge in current.inputs:
-            origin = (
-                f'root {edge.root or edge.param}'
-                if edge.source is None
-                else edge.source
-            )
-            lines.append(f'- `{edge.param}` ← {origin}')
+            if edge.handle is not None:
+                previews.append(
+                    mo.vstack(
+                        [
+                            thumbnail(recorder.store.get(edge.handle)),
+                            mo.md(f'`{edge.param}` · in'),
+                        ],
+                        align='center',
+                    )
+                )
         for name, handle in current.outputs.items():
-            lines.append(f'- {name} → `{handle}`')
-    facts = mo.md('\n'.join(lines))
-    runs = mo.ui.table(
+            previews.append(
+                mo.vstack(
+                    [
+                        thumbnail(recorder.store.get(handle)),
+                        mo.md(f'`{name}` · out'),
+                    ],
+                    align='center',
+                )
+            )
+    row = (
+        mo.hstack(previews, gap=1, justify='start') if previews else mo.md('')
+    )
+    panel = mo.vstack([header, row], align='start')
+    return (panel,)
+
+
+@app.cell
+def _(mo, node):
+    import json
+
+    table = mo.ui.table(
         [
             {
-                'run': r.id,
-                'current': r.current,
-                'status': r.status,
-                'params': json.dumps(r.params),
-                'error': r.error or '',
+                'run': run.id,
+                'current': run.current,
+                'status': run.status,
+                'params': json.dumps(run.params),
+                'error': run.error or '',
             }
-            for r in node.runs
+            for run in node.runs
         ],
         selection=None,
     )
-    mo.vstack([facts, runs])
+    return (table,)
+
+
+@app.cell
+def _(diagram, mo, panel, table):
+    mo.hstack(
+        [diagram, mo.vstack([panel, table], align='stretch')],
+        widths=[1, 1],
+        align='start',
+    )
     return

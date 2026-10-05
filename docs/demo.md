@@ -28,13 +28,14 @@ replayed — first on one image, then over a folder.
 ## What runs today
 
 `demo/headless.py` asserts the headless parts, against three numpy-only ops
-that stand in for the scikit-ops ones (28 checks; exits non-zero on failure):
+that stand in for the scikit-ops ones (31 checks; exits non-zero on failure):
 
 - a root declared rather than assumed, and an undeclared array refused with a
   clear message
 - three sibling runs of one step with the latest current; a step going stale
   when its input moves on, and nothing auto-running
-- a hand edit marked without touching the log
+- a hand edit marked without touching the log, and a step downstream of it
+  marked affected
 - an abandoned branch kept out of the exported recipe; a recipe with no
   handle in it and a shape hint on its root
 - the target closure drawn as a Mermaid graph, the abandoned branch absent,
@@ -52,9 +53,11 @@ render and the marimo app exist).
 ## The graph app
 
 `notebooks/graph.py` is a marimo app that records the demo scenario into a
-temporary store and draws it: the Mermaid diagram, a target picker (empty
-shows the whole session; chosen steps keep only their closure, the rule
-export uses), and a panel for one step's runs, parameters and handles.
+temporary store and draws it: the Mermaid diagram — each node titled by step,
+op and an emoji signal — beside a panel for one step, with tiny previews of
+the arrays its current run consumed and produced, and a table of its runs.
+A target picker prunes the diagram to the chosen closure, the rule export
+uses.
 
     uv run marimo run notebooks/graph.py
 
