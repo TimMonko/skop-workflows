@@ -7,14 +7,15 @@ names the step an op's output fills, and gets the result back.
 from __future__ import annotations
 
 import uuid
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from typing import Any, Protocol
 
 import numpy as np
+from opspec.op import NDARRAY, OpSpec, type_spec
 
 from .derived import Graph
-from .op import OpInfo, info, is_json, to_json
-from .record import ACCEPTED, EDITED, Event, Handle, Run
+from .params import is_json, to_json
+from .record import ACCEPTED, EDITED, REVERTED, Event, Handle, Root, Run
 from .store import Store
 
 
@@ -61,8 +62,15 @@ class Recorder:
     # -- host-facing -----------------------------------------------------
 
     def root(self, name: str, array: np.ndarray) -> Handle:
-        """Declare an input. Anything not declared is refused, never assumed."""
-        return self.store.put(name, array)
+        """Declare an input, and record where it went.
+
+        Anything not declared is refused, never assumed. Every declaration is
+        its own record, so a root that moves under its consumers is visible in
+        the log and makes them stale.
+        """
+        handle = self.store.put(name, array)
+        self.store.append(Root(id=_new_id(), name=name, handle=handle))
+        return handle
 
     def graph(self) -> Graph:
         return Graph(self.store.records())
@@ -71,6 +79,17 @@ class Recorder:
         """Record that a step's output was changed by hand."""
         run = self._current_or_raise(step)
         event = Event(id=_new_id(), kind=EDITED, run=run.id, note=note)
+        self.store.append(event)
+        return event
+
+    def mark_reverted(self, step: str, note: str | None = None) -> Event:
+        """Record that a step's output went back to what its run produced.
+
+        The edit stays in the log; this mark supersedes it, so the step stops
+        being edited and nothing downstream counts as affected any more.
+        """
+        run = self._current_or_raise(step)
+        event = Event(id=_new_id(), kind=REVERTED, run=run.id, note=note)
         self.store.append(event)
         return event
 
@@ -84,7 +103,7 @@ class Recorder:
     # -- running ---------------------------------------------------------
 
     def run(self, fn: Callable, step: str, args: dict[str, Any]) -> Any:
-        spec = info(fn)
+        spec = OpSpec.from_op(fn)
         inputs = self._inputs(spec, args)
         params = {
             name: to_json(value)
@@ -104,7 +123,7 @@ class Recorder:
                 Run(
                     id=_new_id(),
                     step=step,
-                    op=spec.id,
+                    op=spec.name,
                     inputs=inputs,
                     params=params,
                     status='failed',
@@ -119,7 +138,7 @@ class Recorder:
             Run(
                 id=_new_id(),
                 step=step,
-                op=spec.id,
+                op=spec.name,
                 inputs=inputs,
                 outputs=outputs,
                 params=params,
@@ -128,14 +147,75 @@ class Recorder:
         )
         return result
 
+    def update(self, fn: Callable, step: str) -> Any:
+        """Run a stale step again, taking each input from where it now is.
+
+        A stale step read data that has since moved on. Updating it is the
+        deliberate gesture that consumes the newer data; nothing does it on
+        its own (decision 8).
+        """
+        graph = self.graph()
+        run = graph.current(step)
+        if run is None:
+            raise KeyError(f'no successful run of {step!r} to update')
+        args: dict[str, Any] = {
+            name: self._current_array(graph, handle)
+            for name, handle in run.inputs.items()
+        }
+        args.update(run.params)
+        return self.run(fn, step, args)
+
+    def rerun(self, fn: Callable, step: str) -> Any:
+        """Run a step again from the run it is on: its inputs, its params.
+
+        Unlike :meth:`update` this does not go looking for newer data; it is
+        the deliberate "do that again", and it adds a run rather than moving
+        the step (decision 3).
+        """
+        run = self.graph().current(step)
+        if run is None:
+            raise KeyError(f'no successful run of {step!r} to rerun')
+        args: dict[str, Any] = {
+            name: self.store.get(handle) for name, handle in run.inputs.items()
+        }
+        args.update(run.params)
+        return self.run(fn, step, args)
+
+    def produce(
+        self, targets: list[str], registry: Mapping[str, Callable]
+    ) -> list[str]:
+        """Bring the targets' closure up to date, and say what that ran.
+
+        Every step in the closure keeps the parameters it was last run with
+        and takes its inputs from wherever they now are; a step already
+        current is left alone. It is decision 8's manual gesture applied to a
+        whole selection rather than one step -- the call behind "run what is
+        needed".
+
+        The log grows as this runs, so the graph is re-read each time round:
+        updating one step is exactly what makes its consumers stale.
+        """
+        ran = []
+        for step in self.graph().closure(list(targets)):
+            graph = self.graph()
+            if not graph.is_stale(step):
+                continue
+            run = graph.current(step)
+            fn = None if run is None else registry.get(run.op)
+            if fn is None:
+                raise KeyError(f'cannot resolve the op of {step!r}')
+            self.update(fn, step)
+            ran.append(step)
+        return ran
+
     # -- internals -------------------------------------------------------
 
-    def _inputs(self, spec: OpInfo, args: dict[str, Any]) -> dict[str, Handle]:
+    def _inputs(self, spec: OpSpec, args: dict[str, Any]) -> dict[str, Handle]:
         found = {}
-        for name in spec.array_params:
+        for name in _array_params(spec):
             value = args.get(name)
             if not isinstance(value, np.ndarray):
-                raise TypeError(f'{spec.id} needs an array for {name!r}')
+                raise TypeError(f'{spec.name} needs an array for {name!r}')
             handle = self.store.handle_of(value)
             if handle is None:
                 raise MissingRoot(
@@ -146,7 +226,7 @@ class Recorder:
             found[name] = handle
         return found
 
-    def _save(self, spec: OpInfo, step: str, result: Any) -> dict[str, Handle]:
+    def _save(self, spec: OpSpec, step: str, result: Any) -> dict[str, Handle]:
         if len(spec.outputs) == 1:
             return {spec.outputs[0].name: self.store.put(step, result)}
         return {
@@ -154,8 +234,47 @@ class Recorder:
             for out in spec.outputs
         }
 
+    def _current_array(self, graph: Graph, handle: Handle) -> np.ndarray:
+        """Where the data behind an input is now, not where it was."""
+        producer = graph.producer(handle)
+        if producer is not None:
+            # Which of the producer's outputs this came from, by value: an
+            # op's output name and the parameter it feeds need not match.
+            out = next(
+                (
+                    name
+                    for name, made in producer.outputs.items()
+                    if made == handle
+                ),
+                None,
+            )
+            latest = graph.current(producer.step)
+            if latest is not None:
+                handle = latest.outputs.get(out or '', handle)
+            return self.store.get(handle)
+        root = graph.root_of(handle)
+        if root is not None:
+            current = graph.current_root(root.name)
+            if current is not None:
+                handle = current.handle
+        return self.store.get(handle)
+
     def _current_or_raise(self, step: str) -> Run:
         run = self.graph().current(step)
         if run is None:
             raise KeyError(f'no successful run of {step!r} to mark')
         return run
+
+
+def _array_params(spec: OpSpec) -> tuple[str, ...]:
+    """Which of an op's parameters are arrays.
+
+    A wire type rather than a role: an array parameter may declare no role --
+    deciding what to show it as is the host's business -- and a run still has
+    to know it was given a handle for it.
+    """
+    return tuple(
+        param.name
+        for param in spec.params
+        if type_spec(param.type).name == NDARRAY
+    )

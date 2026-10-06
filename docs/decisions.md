@@ -116,3 +116,50 @@ Promoted decisions move into [`adr/`](adr/); their numbers stay here.
     recipe, and its consumers list it as a root to supply at replay. Not
     built yet: it waits for the napari host that can pass the painted array;
     until then `accept_edit` only clears the edited mark.
+35. **The napari host keeps its bookkeeping in a module that imports no
+    napari, behind a two-method protocol.** A host owns a recorder and a
+    *display*; a display lists its layers and shows one. The napari adapter is
+    `skop_napari/viewer.py` and the second adapter is a fake in the tests, so
+    what the host decides is asserted without a viewer. It is called a
+    *display* because "surface" is already a napari `Role` and layer type, and
+    "staged" already means the buffered writes of the Icechunk store.
+36. **A host knows a layer by an id it issues into the layer's metadata, not
+    by the layer's name.** A name is a label: renaming must change nothing,
+    and two layers may share a name. The id is written to
+    `layer.metadata['skop']['id']`, so it survives a rename and travels with a
+    layer copy. A layer's `source` cannot serve instead — `Source` has no
+    identity field and is frozen, so there is nothing on a layer to borrow.
+37. **Reverting an edit is a mark of its own.** A `reverted` event supersedes
+    the `edited` one, so the step stops being edited and nothing downstream is
+    affected any more, while the edit itself stays in the log. A revert is not
+    a run: the output is already stored.
+38. **A root declaration is a record in the log.** A root is not a step — it
+    has no op, and a recipe supplies it at replay — but each version of it is
+    recorded, so a root that moves under its consumers makes them stale.
+    Without the record the question is unanswerable from the log, because root
+    versions exist only in the store.
+39. **An op's parameters are read off its function signature.**
+    `OpInfo.params` is built from `inspect.signature` when the op is declared,
+    in the shape opspec calls `ParamSpec` (name, wire type, default,
+    required): one less thing to keep in step with the function. (Superseded
+    by 40.)
+40. **opspec is the op contract; this library declares none of its own.**
+    `@op`, `OpSpec`, `ParamSpec`, `Role` and the `Runner` protocol come from
+    opspec, and the stand-in that mirrored them is gone. Two things opspec
+    decides that were hand-written here: what an op's parameters are, and
+    which of them are arrays -- a wire type, not a role, because an array may
+    declare no role and a run still needs a handle for it. What stayed is the
+    one rule opspec does not have: a parameter must be JSON to be recordable,
+    in `params.py`. (Supersedes 15.)
+41. **The napari host lives in the sibling [`skop-napari`](../../../skop-napari)
+    repo.** That is the front end this ecosystem already has: it owns the npe2
+    manifest, op discovery, the axis mapping and the off-thread running. This
+    repo imports no napari and has no Qt, and the seam between the two stays
+    narrow so the host could be lifted out again. (Supersedes the napari
+    package in 25.)
+42. **Bringing a selection up to date is a recorder method, not a host's.**
+    `update(fn, step)` re-runs a step taking each input from where it now is;
+    `rerun(fn, step)` from where it was, and adds a run rather than moving the
+    step; `produce(targets, registry)` walks the closure in order and updates
+    whatever is stale. All three are about runs and stores rather than layers,
+    and each takes the op, because a recorder resolves no IDs (decision 2).

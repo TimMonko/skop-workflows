@@ -1,7 +1,9 @@
-"""Runs and the events that mark them.
+"""Runs, the roots they read, and the events that mark them.
 
-The log is append-only: a run is never edited, and an edit to a step's output is
-its own record. Everything else (staleness, which run is current) is derived.
+The log is append-only: a run is never edited, and an edit to a step's output
+is its own record. A root is recorded too, once per version, so that moving an
+input under its consumers is visible to everything derived from the log.
+Everything else (staleness, which run is current) is derived.
 """
 
 from __future__ import annotations
@@ -13,8 +15,10 @@ from typing import Any
 Handle = str
 
 RUN = 'run'
+ROOT = 'root'
 EDITED = 'edited'
 ACCEPTED = 'accepted'
+REVERTED = 'reverted'
 
 
 @dataclass(frozen=True)
@@ -40,6 +44,31 @@ class Run:
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> Run:
+        return cls(**{k: v for k, v in data.items() if k != 'kind'})
+
+
+@dataclass(frozen=True)
+class Root:
+    """One named input, as it was stored: a root at one version.
+
+    A root is not a step -- it has no op, and a recipe supplies it at replay --
+    but it is recorded, because a step that read it has to be able to go stale
+    when the input under it moves.
+    """
+
+    id: str
+    name: str
+    handle: Handle
+
+    @property
+    def kind(self) -> str:
+        return ROOT
+
+    def to_dict(self) -> dict[str, Any]:
+        return {'kind': ROOT, **self.__dict__}
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> Root:
         return cls(**{k: v for k, v in data.items() if k != 'kind'})
 
 
@@ -70,7 +99,9 @@ class Event:
         )
 
 
-def from_dict(data: dict[str, Any]) -> Run | Event:
-    return (
-        Run.from_dict(data) if data['kind'] == RUN else Event.from_dict(data)
-    )
+def from_dict(data: dict[str, Any]) -> Run | Root | Event:
+    if data['kind'] == RUN:
+        return Run.from_dict(data)
+    if data['kind'] == ROOT:
+        return Root.from_dict(data)
+    return Event.from_dict(data)

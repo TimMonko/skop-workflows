@@ -20,15 +20,16 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'src'))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from demo_ops import connect, gaussian, otsu, percentile  # noqa: E402
+from opspec.op import OpSpec, Role  # noqa: E402
 from scenario import blobs, session  # noqa: E402
 
 from skop_core import (  # noqa: E402
     InProcess,
     MissingRoot,
     Recorder,
+    Run,
     batch,
     export,
-    info,
     is_json,
     replay,
 )
@@ -39,7 +40,7 @@ try:  # the Icechunk backend is an optional extra
 except ImportError:
     IcechunkStore = None
 
-REGISTRY = {info(fn).id: fn for fn in (percentile, gaussian, otsu)}
+REGISTRY = {OpSpec.from_op(fn).name: fn for fn in (percentile, gaussian, otsu)}
 RESULTS: list[bool] = []
 
 
@@ -174,13 +175,94 @@ def main() -> int:
         misc.graph().current('labels').params == {'invert': True},
     )
 
+    print('\n7e. what an op declares comes off its own annotation')
+    spec = OpSpec.from_op(gaussian)
+    otsu_spec = OpSpec.from_op(otsu)
+    check(
+        "the parameters are the function's",
+        [p.name for p in spec.params] == ['image', 'sigma'],
+    )
+    check(
+        'an array parameter is an array, and is required',
+        (spec.params[0].type, spec.params[0].required) == (np.ndarray, True),
+    )
+    check(
+        'and the role comes off the annotation, not the call',
+        (spec.params[0].role, spec.return_role) == (Role.image, Role.image),
+    )
+    check(
+        'a labels op says so, which is what a host draws it from',
+        otsu_spec.return_role is Role.labels,
+    )
+    check(
+        'a scalar keeps its type and its default',
+        (spec.params[1].type, spec.params[1].default) == (float, 2.0),
+    )
+    check(
+        'a bool default comes through as a bool',
+        (otsu_spec.params[1].type, otsu_spec.params[1].default)
+        == (bool, False),
+    )
+
+    print('\n7f. a revert clears an edit without deleting it')
+    undone = session(work, 'revert-check')
+    undone_image = blobs(seed=13)
+    undone.root('image', undone_image)
+    undone.run(gaussian, 'smoothed', {'image': undone_image, 'sigma': 2.0})
+    undone.mark_edited('smoothed', 'painted it')
+    check('the step is edited', undone.graph().is_edited('smoothed'))
+    undone.mark_reverted('smoothed', 'put back')
+    check(
+        'and a revert supersedes the mark',
+        not undone.graph().is_edited('smoothed'),
+    )
+    check(
+        'while the edit stays in the log',
+        len(undone.graph().events) == 2,
+    )
+
+    print('\n7g. a root that moves makes its consumers stale')
+    moved = session(work, 'root-move')
+    moved_image = blobs(seed=14)
+    moved.root('image', moved_image)
+    moved.run(gaussian, 'smoothed', {'image': moved_image, 'sigma': 2.0})
+    check(
+        'nothing is stale to begin with',
+        not moved.graph().is_stale('smoothed'),
+    )
+    moved.root('image', moved_image + 1.0)
+    check(
+        'the root has two versions', len(moved.graph().roots_of('image')) == 2
+    )
+    check('and the consumer went stale', moved.graph().is_stale('smoothed'))
+
+    print('\n7h. bringing a selection up to date')
+    check(
+        'produce runs the stale step and says so',
+        moved.produce(['smoothed'], REGISTRY) == ['smoothed'],
+    )
+    check(
+        'and it is current afterwards',
+        not moved.graph().is_stale('smoothed'),
+    )
+    check(
+        'a second call has nothing left to do',
+        moved.produce(['smoothed'], REGISTRY) == [],
+    )
+    runs = len(moved.graph().runs_of('smoothed'))
+    moved.rerun(gaussian, 'smoothed')
+    check(
+        'a rerun adds a run rather than moving the step',
+        len(moved.graph().runs_of('smoothed')) == runs + 1,
+    )
+
     print('\n8. replay on another image, in a store of its own')
     second = session(work, 'replay-second')
     produced = replay(recipe, {'image': blobs(seed=7)}, second, REGISTRY)
     check('the target came back', set(produced) == {'labels'})
     check(
         'only what the target needs ran',
-        [r.step for r in second.store.records()]
+        [r.step for r in second.store.records() if isinstance(r, Run)]
         == ['normalized', 'smoothed', 'labels'],
     )
     check(
@@ -220,7 +302,8 @@ def main() -> int:
     )
     check(
         'the intermediate was produced on its own',
-        [r.step for r in third.store.records()] == ['normalized', 'smoothed'],
+        [r.step for r in third.store.records() if isinstance(r, Run)]
+        == ['normalized', 'smoothed'],
     )
     fourth = session(work, 'replay-override')
     replay(
@@ -266,7 +349,7 @@ def main() -> int:
             'an array comes back through its handle',
             np.array_equal(
                 chunked.store.get(
-                    chunk_graph.current('smoothed').outputs['image']
+                    chunk_graph.current('smoothed').outputs['result']
                 ),
                 chunk_smoothed,
             ),

@@ -1,32 +1,31 @@
 """skop_core: recordable, replayable workflows made of ops."""
 
 from .derived import Graph
-from .op import OpInfo, Output, info, is_json, op
+from .params import is_json, to_json
 from .recipe import batch, export, plan, replay
-from .record import ACCEPTED, EDITED, Event, Handle, Run
+from .record import ACCEPTED, EDITED, REVERTED, Event, Handle, Root, Run
 from .runner import InProcess, MissingRoot, Recorder, Runner
 from .store import SimpleStore, Store
 
 __all__ = [
     'ACCEPTED',
     'EDITED',
+    'REVERTED',
     'Event',
     'Graph',
     'Handle',
     'InProcess',
     'MissingRoot',
-    'OpInfo',
-    'Output',
     'Recorder',
+    'Root',
     'Run',
     'Runner',
     'SimpleStore',
     'Store',
     'batch',
     'export',
-    'info',
     'is_json',
-    'op',
     'plan',
     'replay',
+    'to_json',
 ]

@@ -36,7 +36,7 @@ import icechunk
 import numpy as np
 import zarr
 
-from .record import Event, Handle, Run, from_dict
+from .record import Event, Handle, Root, Run, from_dict
 
 if TYPE_CHECKING:
     from .store import Store
@@ -57,7 +57,7 @@ class IcechunkStore:
         self._ids: dict[int, tuple[weakref.ref, Handle]] = {}
         self._session: Any = None
         self._staged: dict[Handle, str] = {}
-        self._records: list[Run | Event] = []
+        self._records: list[Run | Root | Event] = []
         self._places: dict[Handle, tuple[str, str]] = {}
         self._versions: dict[str, int] = {}
         self._readers: dict[str, Any] = {}
@@ -108,7 +108,7 @@ class IcechunkStore:
 
     # -- records ---------------------------------------------------------
 
-    def append(self, record: Run | Event) -> None:
+    def append(self, record: Run | Root | Event) -> None:
         session = self._writable()
         what = getattr(record, 'step', None) or record.id
         snapshot = session.commit(
@@ -126,7 +126,7 @@ class IcechunkStore:
         self._session = None
         self._staged = {}
 
-    def records(self) -> list[Run | Event]:
+    def records(self) -> list[Run | Root | Event]:
         return list(self._records)
 
     # -- internals -------------------------------------------------------

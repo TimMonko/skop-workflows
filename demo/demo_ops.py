@@ -1,20 +1,22 @@
 """Three ops, numpy only, so the demo needs no environment built.
 
 They stand in for the scikit-ops ops the real demo will use; the shape of a run
-is the same either way.
+is the same either way. Each one declares itself the way opspec asks -- what
+its data *means* and what type each parameter is -- so a host reads the op
+instead of being told about it.
 """
 
 from __future__ import annotations
 
 import numpy as np
+from opspec.op import op
+from opspec.types import ImageOf, LabelsOf
 
-from skop_core import op
 
-
-@op(('image',), array_params=('image',), roles=('image',))
+@op
 def percentile(
-    image: np.ndarray, low: float = 1.0, high: float = 99.8
-) -> np.ndarray:
+    image: ImageOf[np.ndarray], low: float = 1.0, high: float = 99.8
+) -> ImageOf[np.ndarray]:
     """Rescale so that two percentiles land on 0 and 1."""
     if image.ndim != 2:
         raise ValueError(
@@ -25,8 +27,10 @@ def percentile(
     return np.clip((image - lo) / span, 0.0, 1.0)
 
 
-@op(('image',), array_params=('image',), roles=('image',))
-def gaussian(image: np.ndarray, sigma: float = 2.0) -> np.ndarray:
+@op
+def gaussian(
+    image: ImageOf[np.ndarray], sigma: float = 2.0
+) -> ImageOf[np.ndarray]:
     """Blur with a Gaussian kernel, one axis at a time."""
     if sigma <= 0:
         raise ValueError(f'sigma must be positive, got {sigma}')
@@ -37,8 +41,10 @@ def gaussian(image: np.ndarray, sigma: float = 2.0) -> np.ndarray:
     return out
 
 
-@op(('image',), array_params=('image',), roles=('labels',))
-def otsu(image: np.ndarray, invert: bool = False) -> np.ndarray:
+@op
+def otsu(
+    image: ImageOf[np.ndarray], invert: bool = False
+) -> LabelsOf[np.ndarray]:
     """Keep what lies above Otsu's threshold."""
     flat = np.asarray(image, dtype=float).ravel()
     counts, edges = np.histogram(flat, bins=256)
@@ -58,8 +64,8 @@ def otsu(image: np.ndarray, invert: bool = False) -> np.ndarray:
     return mask <= threshold if invert else mask > threshold
 
 
-@op(('components',), array_params=('labels',), roles=('labels',))
-def connect(labels: np.ndarray) -> np.ndarray:
+@op
+def connect(labels: LabelsOf[np.ndarray]) -> LabelsOf[np.ndarray]:
     """Number the connected components of a mask, four-connected."""
     mask = np.asarray(labels, dtype=bool)
     out = np.zeros(mask.shape, dtype=np.int32)

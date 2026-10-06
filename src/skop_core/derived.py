@@ -6,14 +6,15 @@ it was edited, and what a set of targets needs are all read off the log.
 
 from __future__ import annotations
 
-from .record import EDITED, Event, Handle, Run
+from .record import EDITED, Event, Handle, Root, Run
 
 
 class Graph:
     """The steps a log describes, and the questions a host asks about them."""
 
-    def __init__(self, records: list[Run | Event]) -> None:
+    def __init__(self, records: list[Run | Root | Event]) -> None:
         self.runs = [r for r in records if isinstance(r, Run)]
+        self.roots = [r for r in records if isinstance(r, Root)]
         self.events = [e for e in records if isinstance(e, Event)]
         self.by_step: dict[str, list[Run]] = {}
         for run in self.runs:
@@ -22,6 +23,13 @@ class Graph:
         for run in self.runs:
             for handle in run.outputs.values():
                 self._producer[handle] = run
+        #: Every version of a root, oldest first, by name.
+        self._root_versions: dict[str, list[Root]] = {}
+        #: Which root a handle was recorded as, so no handle needs parsing.
+        self._root_of: dict[Handle, Root] = {}
+        for root in self.roots:
+            self._root_versions.setdefault(root.name, []).append(root)
+            self._root_of[root.handle] = root
 
     # -- steps -----------------------------------------------------------
 
@@ -40,6 +48,18 @@ class Graph:
         """The run that produced a handle, or None if it is a root."""
         return self._producer.get(handle)
 
+    def root_of(self, handle: Handle) -> Root | None:
+        """The root a handle was recorded as, or None if a step made it."""
+        return self._root_of.get(handle)
+
+    def roots_of(self, name: str) -> list[Root]:
+        return list(self._root_versions.get(name, ()))
+
+    def current_root(self, name: str) -> Root | None:
+        """The newest version stored under a name, or None if never stored."""
+        found = self._root_versions.get(name)
+        return found[-1] if found else None
+
     def edge(self, run: Run, param: str) -> str | None:
         """The step a parameter comes from, or None if it is a root."""
         produced = self.producer(run.inputs[param])
@@ -53,9 +73,14 @@ class Graph:
             return False
         for handle in run.inputs.values():
             upstream = self.producer(handle)
-            if upstream is None:
+            if upstream is not None:
+                if self.current(upstream.step) is not upstream:
+                    return True
                 continue
-            if self.current(upstream.step) is not upstream:
+            # A root has no producer, but it can still move: a newer version
+            # stored under the same name supersedes the one read here.
+            root = self._root_of.get(handle)
+            if root is not None and self.current_root(root.name) is not root:
                 return True
         return False
 
