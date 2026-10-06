@@ -81,9 +81,12 @@ Promoted decisions move into [`adr/`](adr/); their numbers stay here.
 23. **A step is keyed by its op ID together with its output names.** A
     parameter change is a new run of the same step; an op change starts a new
     step. (Refined by 33.)
-24. **Edit detection is a flag around the plugin's own writes.** Any
-    `layer.events.data` outside that bracket is a user edit; the event always
-    fires for layer edits, and detection never compares arrays.
+24. **Edit detection is a flag around the plugin's own writes.** Any data
+    event outside that bracket is a user edit: `layer.events.data` on
+    assignment, `layer.events.paint` when a Labels layer is painted (napari
+    does not emit `data` there), `set_data` on refresh. In-place mutation
+    emits nothing and stays undetectable. Detection never compares arrays.
+    (Updated after checking napari, 2026-10-05.)
 25. **Three packages, not seven:** `core` (records, graph, pruning, state
     machine, replay), `store` (simple and Icechunk backends), `napari`
     (plugin and UI).

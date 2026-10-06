@@ -104,6 +104,32 @@ Branch `recorder_and_icechunk` of scikit-ops: `src/skop/record.py`,
   `_qprocessors.py`.
 - Image and Labels can be lazy (dask, zarr). Points, Shapes, Surface, Tracks
   and Vectors are in-memory arrays plus a `features` DataFrame, or meshes.
+- Checked again 2026-10-05:
+  - `napari.qt.thread_worker` / `create_worker` (`src/napari/_qt/qthreading.py`)
+    give `started` / `returned` / `errored` / `warned`, plus `yielded` and
+    `paused` / `resumed` for generators; `progress=True` wires a progress bar;
+    `worker.quit()` cancels.
+  - `layer.metadata` is a live dict, copied at creation and included in
+    `as_layer_data_tuple`; assigning a key emits nothing, replacing the whole
+    dict emits `events.metadata`.
+  - Data events: `events.data` on assignment, **`events.paint` on Labels
+    painting** (not `data`), `events.set_data` on `refresh()`; in-place
+    mutation emits nothing.
+  - `layer.source` is a frozen `Source`; `_set_source` raises if it is already
+    populated, so provenance must be attached during creation, with the
+    `layer_source(...)` context manager.
+  - `viewer.layers.events` emits `inserting(index)`, `inserted(index, value)`,
+    `removing`, `removed`, `moving`, `moved`, `reordered`, `renamed`, plus
+    `selection.events.changed` and `selection.events.active`.
+  - Plugin widget results become layers through type-keyed entries in the
+    injection store (`src/napari/_qt/_qapp_model/injection/_qprocessors.py`);
+    magicgui's `return_callback`s call the same functions, and the new layer
+    records `source.widget`. No event announces the call.
+  - `napari.plugins._npe2.get_widget_contribution(plugin, widget)` returns
+    `(callable, display_name)`; `pm.iter_widgets()` enumerates contributions.
+  - No "file opened" event: drag/drop and `viewer.open` both go through
+    `_add_layers`, so a watcher uses `layers.events.inserted` plus
+    `layer.source.path` / `source.reader_plugin`.
 
 ## ndv
 
