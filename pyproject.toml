@@ -2,7 +2,7 @@
 name = "skop-workflows"
 version = "0.0.0"
 description = "Recordable, replayable, batchable workflows made of ops"
-requires-python = ">=3.11"
+requires-python = ">=3.10"
 dependencies = ["numpy>=1.26", "opspec"]
 
 [build-system]
@@ -22,8 +22,8 @@ viz = [
     "matplotlib",
 ]
 icechunk = [
-    "icechunk",
-    "zarr",
+    "icechunk; python_version >= '3.11'",
+    "zarr; python_version >= '3.11'",
 ]
 
 [tool.uv]
