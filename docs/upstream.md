@@ -18,6 +18,22 @@ worktree of its branch `recorder_and_icechunk`, `C:\Users\Tim\opspec`,
   exit.
 - `LocalFileSystemStorage` is not safe for concurrent commits (a release is
   said to fix this).
+- Checked again 2026-10-05, against icechunk 2.2.2 and zarr 3.4.0:
+  - `icechunk.local_filesystem_storage(path)` then `Repository.open_or_create`
+    (or `.open`). A fresh repo already has one snapshot, "Repository
+    initialized", whose metadata carries `__icechunk.is_root`.
+  - Writes: `repo.writable_session(branch)`, then `zarr.create_array(
+    session.store, name='arrays/<name>/v<N>', data=...)` for nested paths,
+    then `session.commit(message=..., metadata={...}, allow_empty=True)`,
+    which returns the snapshot id. **After a commit the session's store is
+    read-only**, so the next write needs a new session. A metadata-only
+    commit is refused unless `allow_empty=True`.
+  - Reads: `repo.readonly_session(branch='main')` or `readonly_session(
+    snapshot_id=...)`. `repo.ancestry(branch='main')` walks newest first;
+    each commit exposes `.id`, `.message`, `.metadata`.
+  - Opening a repo prints Rust warnings: local-filesystem storage is unsafe
+    for concurrent commits, and conditional-PUT readback wants
+    `unsafe_use_metadata` (a lost-response caveat, not an error).
 
 ## opspec
 

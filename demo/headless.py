@@ -23,7 +23,9 @@ from demo_ops import connect, gaussian, otsu, percentile  # noqa: E402
 from scenario import blobs, session  # noqa: E402
 
 from skop_core import (  # noqa: E402
+    InProcess,
     MissingRoot,
+    Recorder,
     batch,
     export,
     info,
@@ -31,6 +33,11 @@ from skop_core import (  # noqa: E402
     replay,
 )
 from skop_visual import to_mermaid, view  # noqa: E402
+
+try:  # the Icechunk backend is an optional extra
+    from skop_core.icechunk_store import IcechunkStore  # noqa: E402
+except ImportError:
+    IcechunkStore = None
 
 REGISTRY = {info(fn).id: fn for fn in (percentile, gaussian, otsu)}
 RESULTS: list[bool] = []
@@ -227,6 +234,83 @@ def main() -> int:
         'a parameter can be overridden',
         fourth.graph().current('smoothed').params['sigma'] == 5.0,
     )
+
+    print('\n11. the Icechunk backend, behind the same store protocol')
+    if IcechunkStore is None:
+        print('  SKIP  icechunk is not installed (uv sync --group icechunk)')
+    else:
+        chunked = Recorder(
+            IcechunkStore(work / 'icechunk'),
+            InProcess(),
+            version='demo 0.1',
+        )
+        chunk_image = blobs(seed=21)
+        chunked.root('image', chunk_image)
+        chunk_normalized = chunked.run(
+            percentile,
+            'normalized',
+            {'image': chunk_image, 'low': 1.0, 'high': 99.8},
+        )
+        chunk_smoothed = chunked.run(
+            gaussian, 'smoothed', {'image': chunk_normalized, 'sigma': 2.0}
+        )
+        chunked.mark_edited('smoothed', 'painted one cell')
+        chunk_graph = chunked.graph()
+        check(
+            'the same graph answers come back',
+            chunk_graph.current('smoothed').params['sigma'] == 2.0
+            and chunk_graph.is_edited('smoothed')
+            and not chunk_graph.is_stale('smoothed'),
+        )
+        check(
+            'an array comes back through its handle',
+            np.array_equal(
+                chunked.store.get(
+                    chunk_graph.current('smoothed').outputs['image']
+                ),
+                chunk_smoothed,
+            ),
+        )
+        chunk_recipe = export(chunk_graph, ['smoothed'], store=chunked.store)
+        handles = [
+            handle
+            for run in chunk_graph.runs
+            for handle in (*run.inputs.values(), *run.outputs.values())
+        ]
+        check(
+            'the recipe still carries no handle',
+            all(handle not in json.dumps(chunk_recipe) for handle in handles),
+        )
+        check(
+            'a root is still named, with a shape hint',
+            chunk_recipe['roots']
+            == {'image': {'ndim': 2, 'dtype': 'float64'}},
+        )
+        check(
+            'the view draws it too',
+            'root image' in to_mermaid(view(chunk_graph, store=chunked.store)),
+        )
+        commits = list(chunked.store.repo.ancestry(branch='main'))
+        check(
+            'one commit per record, plus the initial snapshot',
+            len(commits) == len(chunked.store.records()) + 1,
+        )
+        chunk_second = Recorder(
+            IcechunkStore(work / 'icechunk-replay'),
+            InProcess(),
+            version='demo 0.1',
+        )
+        produced = replay(
+            chunk_recipe, {'image': blobs(seed=22)}, chunk_second, REGISTRY
+        )
+        check(
+            'replay runs against it through the same code',
+            set(produced) == {'smoothed'}
+            and not any(
+                chunk_second.graph().is_stale(step)
+                for step in chunk_second.graph().steps()
+            ),
+        )
 
     print(f'\nstore layout, under {work}')
     for path in sorted(work.rglob('*')):

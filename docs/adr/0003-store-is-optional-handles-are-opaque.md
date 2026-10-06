@@ -28,3 +28,16 @@ settled now, while only one backend exists.
 - Handle identity for in-memory arrays is the store's record of what it has
   seen; mutating an array in place breaks it, which is what the edited mark
   exists for.
+
+## How the Icechunk backend does it
+
+Everything a run writes is staged in one Icechunk session and lands in one
+commit per record: the arrays, the record itself as commit metadata, and a
+small index mapping each handle to its array path. A committed session's
+store is read-only, so the next write opens a fresh session at the new tip,
+and a record with no arrays behind it — an edit mark — commits as metadata
+alone. Every snapshot is therefore one complete run, and a crash between two
+runs loses nothing. Handles are the store's own tokens, `<name>@<short id>`;
+the index carried in the commit is how one finds its snapshot and path again.
+Icechunk's local-filesystem warning about concurrent commits is fine for one
+recorder and not for a shared folder.

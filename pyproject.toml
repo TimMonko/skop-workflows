@@ -21,9 +21,13 @@ viz = [
     "marimo",
     "matplotlib",
 ]
+icechunk = [
+    "icechunk",
+    "zarr",
+]
 
 [tool.uv]
-default-groups = ["dev", "viz"]
+default-groups = ["dev", "viz", "icechunk"]
 
 [tool.ruff]
 line-length = 79
