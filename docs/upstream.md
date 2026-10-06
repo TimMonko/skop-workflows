@@ -35,12 +35,14 @@ and `C:\Users\Tim\napari`.
     for concurrent commits, and conditional-PUT readback wants
     `unsafe_use_metadata` (a lost-response caveat, not an error).
 
-## opspec (dropped)
+## opspec (now inside scikit-ops)
 
 - A prototype that implemented the same op contract a second time, standard
   library only: `@op(env=...)` set `__opspec__` and returned the function, and
   `OpSpec.from_op` read it back.
-- **No longer used** (decision 44). The specification is tracked in
+- **Back, as scikit-ops' spec layer** (decision 45): it lives in
+  `scikit-ops/opspec` and `skop` re-exports it. Earlier, it was dropped
+  (decision 44): The specification is tracked in
   scikit-ops, where the ops are; the two copies had drifted, and the survivor
   is scikit-ops' `_spec.py`. `../opspec` is not a dependency of anything here.
 - Its `Runner` was an interface only (`run(fn, args, *, axes, plans, position,
@@ -55,11 +57,11 @@ and `C:\Users\Tim\napari`.
   imports must live inside function bodies. Environments live in
   `envs/<id>/pixi.toml`, keyed by id.
 - **The op contract lives here** (decision 44): `@op(...)`, `OpSpec` /
-  `ParamSpec` / `OutputSpec`, `spec(fn)` cached on the function, `Role`,
+  `ParamSpec` / `OutputSpec` (from opspec, read with `OpSpec.from_op(fn)`), `Role`,
   `Axes` and the wire vocabulary. `_spec.py` is standard library only,
   because it is imported in every worker.
-- `OpSpec.outputs` is a tuple of output *names*; `OpSpec.output_specs` carries
-  each one's type and role. `Role` has no `boxes` -- a box is a `shapes`, and
+- `OpSpec.outputs` is a tuple of `OutputSpec`s, each with a name, type and
+  role. `Role.boxes` exists again (boxes are no longer drawn as `shapes`), and
   `skop.boxes` holds the converters.
 - An op with no `env` is a **workflow** (`OpSpec.is_workflow`): it runs on
   the host and calls other ops through an ambient runner. Host-side leaf ops
@@ -72,7 +74,9 @@ and `C:\Users\Tim\napari`.
 - The ambient mechanism: `_run_here` does `_current.set(_Ambient(self,
   task))` — unconditionally — and the module-level `skop.run()` dispatches
   through `_current.get()`. **A wrapper runner is therefore bypassed for
-  nested calls** until decision 16's patch lands.
+  nested calls** until decision 16's patch lands. The patch is written
+  (`skop.ambient`, and `_run_here` leaving an installed ambient alone) but
+  uncommitted in the scikit-ops checkout.
 - Plain arrays are copied to shared memory by `_codec` (two copies at peak).
   `lazy-array.md` is a proposal; nothing is built.
 - Workflow docs list "saving a configured workflow as a re-runnable recipe"

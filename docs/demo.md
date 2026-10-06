@@ -49,8 +49,9 @@ that stand in for the scikit-ops ones (41 checks; exits non-zero on failure):
 - a batch that carries on past a wrong-shaped file and says why; a parameter
   override
 
-Not yet built: the nested workflow op (step 8), the environments and worker
-dispatch (steps 3–4 in their real form), and the napari surface — including
+Step 8, the nested workflow op, is checked headlessly (checks 12–12c) through
+`RecordingRunner`. Not yet built: the environments and worker dispatch
+(steps 3–4 in their real form) in this repo's own demo, and the napari surface — including
 showing the graph view there (step 7; the model, the Mermaid render and the
 marimo app exist).
 

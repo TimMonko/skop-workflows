@@ -60,7 +60,11 @@ Promoted decisions move into [`adr/`](adr/); their numbers stay here.
 16. **Nested workflow calls go through the outermost runner.** scikit-ops gets
     a small patch that lets the outermost runner install itself as the
     ambient one, and its runner contract gains the line "nested calls go
-    through the runner the caller used". **Still to build.**
+    through the runner the caller used". **Built** as `skop.ambient(runner)`
+    in the scikit-ops working tree (not yet committed there), and used by
+    `RecordingRunner`, which is how a panel, a script or a workflow is
+    recorded by being pointed at it: the recorder stands where the runner
+    stands, and never launches an op itself.
 17. **The demo contract in [demo.md](demo.md) is the definition of done**,
     including the host-side workflow op (step 8) and the headless replay and
     batch (step 10).
@@ -183,3 +187,17 @@ Promoted decisions move into [`adr/`](adr/); their numbers stay here.
     divergence we now live with, is recorded in
     [design note 0005](design/0005-the-op-contract.md). (Supersedes 40 and
     43.)
+45. **opspec is back as scikit-ops' spec layer; we still import `skop`.**
+    scikit-ops moved opspec into its own repo (`opspec/`, a workspace
+    package) and takes `OpSpec`, `ParamSpec`, `Role` and the wire vocabulary
+    from it, re-exported by `skop`. So nothing here imports `opspec`
+    directly, and a spec is read with `OpSpec.from_op(fn)` rather than
+    `spec(fn)`. Outputs are `OutputSpec`s (`spec.outputs`, each with a
+    `name` and a `role`), and `Role.boxes` exists again. (Refines 44.)
+46. **An op given as a parameter is recorded as its ID.** A workflow may take
+    the op to use as a parameter (`psf_op`, `decon_op`). The recorder writes
+    it as the op's ID, which is JSON, and `Recorder.run` turns an ID back
+    into the function from the parameter's own choices, then from the
+    recorder's registry. A recipe still holds no callable (decision 2).
+47. **An optional array that was not given is not an input.** It is recorded
+    as the parameter it is, `None`; an `Out` buffer is never an input.

@@ -1,6 +1,9 @@
 # Design note 0004: running ops without freezing napari
 
-Status: proposed, not built.
+Status: built for the napari host. The dock does not run ops: the Ops and
+Workflows panels do, through a session's `RecordingRunner` (skop-napari
+`_session.py`), over scikit-ops' own `Runner`, so environments, progress and
+Cancel work as they always did. Not built: `cancelled` runs, durations.
 
 ## Off the GUI thread
 
@@ -9,6 +12,9 @@ must not run on the Qt main thread — napari's own rule. Napari ships the tool
 for it: `napari.qt.thread_worker` (verified), a decorator giving a worker with
 `started` / `returned` / `errored` / `aborted` signals, `yielded` for
 progress, an optional progress bar (`progress=True`), and `quit()` to cancel.
+
+(Superseded: the panel that runs the op already has the worker; the recorder
+is pointed at it. What follows is the original proposal.)
 
 The dock wraps each `recorder.run(...)` in such a worker and keeps it on the
 step's row while it runs, so the row can show progress and a Cancel button.
@@ -29,9 +35,8 @@ write yet — today only failures are recorded.
 The inner runner is long-lived: scikit-ops keeps a warm worker per
 environment, and rebuilding an environment per image is the thing to avoid.
 Batch therefore makes one recorder per file (each with its own store) over the
-*same* inner runner. Until the scikit-ops swap (decision 16) the inner runner
-is `InProcess` and a workflow op's nested calls are invisible, so the dock
-starts with single ops.
+*same* inner runner. The inner runner is now scikit-ops' `Runner`, and a
+workflow's nested calls are recorded as child runs (`Run.parent`).
 
 ## Durations
 
