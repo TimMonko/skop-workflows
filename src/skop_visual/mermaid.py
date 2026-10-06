@@ -7,16 +7,18 @@ the interactive home for it.
 
 from __future__ import annotations
 
-from .model import SIGNALS, GraphView
+from .model import COLOURS, ROOT_COLOURS, SIGNALS, GraphView
 
-_CLASS_DEFS = (
-    'classDef fresh fill:#e6f4ea,stroke:#137333,color:#137333',
-    'classDef stale fill:#fef7e0,stroke:#b06000,color:#b06000',
-    'classDef affected fill:#f3e8fd,stroke:#8430ce,color:#8430ce',
-    'classDef edited fill:#fce8e6,stroke:#a50e0e,color:#a50e0e',
-    'classDef failed fill:#f1f3f4,stroke:#5f6368,color:#5f6368',
-    'classDef root fill:#e8f0fe,stroke:#1967d2,color:#1967d2',
-)
+
+def _class_defs() -> tuple[str, ...]:
+    """One Mermaid class per badge, coloured the way every renderer does."""
+    defs = [
+        f'classDef {badge} fill:{fill},stroke:{stroke},color:{stroke}'
+        for badge, (fill, stroke) in COLOURS.items()
+    ]
+    fill, stroke = ROOT_COLOURS
+    defs.append(f'classDef root fill:{fill},stroke:{stroke},color:{stroke}')
+    return tuple(defs)
 
 
 def _label(text: str) -> str:
@@ -54,5 +56,5 @@ def to_mermaid(view: GraphView) -> str:
         lines.append(
             f'    {source} -->|{_label(edge.param)}| {ids[edge.target]}'
         )
-    lines.extend(f'    {definition}' for definition in _CLASS_DEFS)
+    lines.extend(f'    {definition}' for definition in _class_defs())
     return '\n'.join(lines)

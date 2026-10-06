@@ -7,9 +7,11 @@ takes a ``GraphView`` and nothing else — no store, no Qt, no numpy.
 from .mermaid import to_mermaid
 from .model import (
     AFFECTED,
+    COLOURS,
     EDITED,
     FAILED,
     FRESH,
+    ROOT_COLOURS,
     SIGNALS,
     STALE,
     Edge,
@@ -21,9 +23,11 @@ from .model import (
 
 __all__ = [
     'AFFECTED',
+    'COLOURS',
     'EDITED',
     'FAILED',
     'FRESH',
+    'ROOT_COLOURS',
     'SIGNALS',
     'STALE',
     'Edge',

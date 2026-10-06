@@ -30,6 +30,20 @@ SIGNALS = {
     FAILED: '❌ failed',
 }
 
+#: A fill and a stroke per badge, so every renderer agrees on what a badge
+#: looks like. The Mermaid flowchart and the napari widget both take these.
+COLOURS = {
+    FRESH: ('#e6f4ea', '#137333'),
+    STALE: ('#fef7e0', '#b06000'),
+    AFFECTED: ('#f3e8fd', '#8430ce'),
+    EDITED: ('#fce8e6', '#a50e0e'),
+    FAILED: ('#f1f3f4', '#5f6368'),
+}
+
+#: A root is not a badge -- it never fails and never goes stale -- so it keeps
+#: a colour of its own.
+ROOT_COLOURS = ('#e8f0fe', '#1967d2')
+
 
 @dataclass(frozen=True)
 class Edge:
