@@ -1,8 +1,8 @@
 # Verified facts about the surrounding projects
 
 Read from the local checkouts on 2026-10-04: `C:\Users\Tim\scikit-ops`, a
-worktree of its branch `recorder_and_icechunk`, `C:\Users\Tim\opspec`,
-`C:\Users\Tim\appose-python`, and `C:\Users\Tim\napari`.
+worktree of its branch `recorder_and_icechunk`, `C:\Users\Tim\appose-python`,
+and `C:\Users\Tim\napari`.
 
 **These facts drift: re-verify before relying on any of them.**
 
@@ -35,30 +35,32 @@ worktree of its branch `recorder_and_icechunk`, `C:\Users\Tim\opspec`,
     for concurrent commits, and conditional-PUT readback wants
     `unsafe_use_metadata` (a lost-response caveat, not an error).
 
-## opspec
+## opspec (dropped)
 
-- Standard library only. `@op(env=...)` sets an attribute and returns the
-  function: a direct call is unaffected, and `@op` is **not** a recording
-  hook.
-- `OpSpec`: `name="module:function"`, `env`, `params` (`ParamSpec`: name,
-  wire type, default, role, axes, ui), `outputs` (from a `NamedTuple`
-  return), JSON round-trip. Wire types: `int, float, str, bool, ndarray,
-  path, enum, unknown`.
-- `Role`: boxes, image, labels, masks, points, shapes, surface, tracks,
-  vectors. `Axes`: names are hints, arity binds.
-- `Runner` protocol: `run(fn, args, *, axes, plans, position, on_progress,
-  on_start, **kwargs)`, blocking, plus `close()`. `Builder` builds
-  environments.
-- No op version, no cost hint, no determinism flag, no recording.
-- The same contract is implemented a second time in `skop/_spec.py`, and the
-  two copies have drifted apart in both directions — see
-  [design note 0005](design/0005-the-op-contract.md).
+- A prototype that implemented the same op contract a second time, standard
+  library only: `@op(env=...)` set `__opspec__` and returned the function, and
+  `OpSpec.from_op` read it back.
+- **No longer used** (decision 44). The specification is tracked in
+  scikit-ops, where the ops are; the two copies had drifted, and the survivor
+  is scikit-ops' `_spec.py`. `../opspec` is not a dependency of anything here.
+- Its `Runner` was an interface only (`run(fn, args, *, axes, plans, position,
+  on_progress, on_start, **kwargs)`, plus `close()`), with a `Builder` for
+  environments. scikit-ops' runner is the one that runs now.
+- What it had that scikit-ops does not, and what we gave up by dropping it
+  (`Role.boxes`), is in [design note 0005](design/0005-the-op-contract.md).
 
 ## scikit-ops
 
 - Ops are plain functions, discovered by import into a minimal env, so heavy
   imports must live inside function bodies. Environments live in
   `envs/<id>/pixi.toml`, keyed by id.
+- **The op contract lives here** (decision 44): `@op(...)`, `OpSpec` /
+  `ParamSpec` / `OutputSpec`, `spec(fn)` cached on the function, `Role`,
+  `Axes` and the wire vocabulary. `_spec.py` is standard library only,
+  because it is imported in every worker.
+- `OpSpec.outputs` is a tuple of output *names*; `OpSpec.output_specs` carries
+  each one's type and role. `Role` has no `boxes` -- a box is a `shapes`, and
+  `skop.boxes` holds the converters.
 - An op with no `env` is a **workflow** (`OpSpec.is_workflow`): it runs on
   the host and calls other ops through an ambient runner. Host-side leaf ops
   and workflows look the same in the spec; only observed nested runs tell

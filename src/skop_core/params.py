@@ -3,7 +3,7 @@
 Parameters must be JSON: a recipe holds op IDs and JSON parameters and never a
 callable (decision 2), so a run's parameters have to survive a round trip
 through a file. This is the whole of what that rule needs, and it lives apart
-from the op contract, which is opspec's.
+from the op contract, which is scikit-ops'.
 """
 
 from __future__ import annotations

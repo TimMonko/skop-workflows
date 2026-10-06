@@ -42,7 +42,8 @@ Promoted decisions move into [`adr/`](adr/); their numbers stay here.
 10. **Recording is a layer around a runner, in its own generic library.** A
     `Recorder` holds a store and an executor; it is not itself a Runner, and
     it is never built into scikit-ops as `Runner(recorder=...)`. It depends
-    only on opspec; storage sits behind the `Store` protocol.
+    only on scikit-ops' op contract; storage sits behind the `Store`
+    protocol.
 11. **Workflow ops are recorded as parent plus leaf runs.** The recipe expands
     a workflow into its leaf steps; the parent is a grouping for the graph
     view. (For the nested-call mechanics, see 16.)
@@ -58,10 +59,8 @@ Promoted decisions move into [`adr/`](adr/); their numbers stay here.
     proposed back to scikit-ops and opspec rather than waited on.
 16. **Nested workflow calls go through the outermost runner.** scikit-ops gets
     a small patch that lets the outermost runner install itself as the
-    ambient one, and opspec's runner contract gains the line "nested calls go
-    through the runner the caller used". The alternative — subclassing
-    scikit-ops' `Runner` — records nested calls with no patch but couples the
-    recorder to scikit-ops. Still to build.
+    ambient one, and its runner contract gains the line "nested calls go
+    through the runner the caller used". **Still to build.**
 17. **The demo contract in [demo.md](demo.md) is the definition of done**,
     including the host-side workflow op (step 8) and the headless replay and
     batch (step 10).
@@ -92,8 +91,8 @@ Promoted decisions move into [`adr/`](adr/); their numbers stay here.
     (plugin and UI).
 26. **The fork is scikit-ops only**, keeps the module name `skop`, is
     consumed by git URL and never published under that name; new libraries
-    use the `skop_*` import prefix. Anything needed in opspec is vendored or
-    carried as a patch until accepted.
+    use the `skop_*` import prefix. Anything needed in scikit-ops is carried
+    as a patch until it is accepted upstream.
 27. **The recorder and the log know nothing about layers.** A host supplies an
     op's inputs and accepts its outputs; deleting a layer excludes nothing
     from the log, it only stops that host drawing it.
@@ -140,7 +139,7 @@ Promoted decisions move into [`adr/`](adr/); their numbers stay here.
     versions exist only in the store.
 39. **An op's parameters are read off its function signature.**
     `OpInfo.params` is built from `inspect.signature` when the op is declared,
-    in the shape opspec calls `ParamSpec` (name, wire type, default,
+    in the shape scikit-ops calls `ParamSpec` (name, wire type, default,
     required): one less thing to keep in step with the function. (Superseded
     by 40.)
 40. **opspec is the op contract; this library declares none of its own.**
@@ -150,7 +149,8 @@ Promoted decisions move into [`adr/`](adr/); their numbers stay here.
     which of them are arrays -- a wire type, not a role, because an array may
     declare no role and a run still needs a handle for it. What stayed is the
     one rule opspec does not have: a parameter must be JSON to be recordable,
-    in `params.py`. (Supersedes 15.)
+    in `params.py`. (Supersedes 15. Superseded by 44: opspec was a prototype,
+    and the specification is tracked in scikit-ops.)
 41. **The napari host lives in the sibling [`skop-napari`](../../../skop-napari)
     repo.** That is the front end this ecosystem already has: it owns the npe2
     manifest, op discovery, the axis mapping and the off-thread running. This
@@ -169,4 +169,17 @@ Promoted decisions move into [`adr/`](adr/); their numbers stay here.
     reimplementing the merge locally and would rot the day it lands, so we use
     opspec's and wait — see
     [design note 0005](design/0005-the-op-contract.md) for what scikit-ops
-    would have to change.
+    would have to change. (Superseded by 44: there is no merge to wait for
+    now — opspec is dropped and scikit-ops is the contract.)
+44. **scikit-ops is the op contract; opspec is dropped.** opspec was a
+    prototype that implemented a second copy of the same module, and the two
+    copies drifted. We track the specification where the ops live, so `@op`,
+    `OpSpec`, `ParamSpec`, `OutputSpec`, `spec()`, `Role`, `Axes`, the wire
+    vocabulary and the `Runner` protocol come from `skop`, and each op is
+    declared the scikit-ops way: `@op()` for a workflow, `@op(env=...)` for an
+    op that names an environment. The one rule scikit-ops does not have stays
+    here — a parameter must be JSON to be recordable, in `params.py`. Nothing
+    bridges the old contract; what we gave up by dropping opspec, and the
+    divergence we now live with, is recorded in
+    [design note 0005](design/0005-the-op-contract.md). (Supersedes 40 and
+    43.)

@@ -1,89 +1,75 @@
 # Design note 0005: one op contract, and where it lives
 
-Status: ours is settled, theirs is not. We declare ops with opspec's `@op`
-(decision 40) and do not bridge anything. Unifying the two contracts is a
-change to scikit-ops, and theirs to make.
+Status: settled. scikit-ops is the op contract (decision 44). opspec was a
+prototype carrying a second copy of the same module; it is dropped, and this
+note records what that costs and where the two had drifted.
 
 ## What we use
 
-`demo/demo_ops.py` declares its ops with `from opspec.op import op` and types
-them with `ImageOf` / `LabelsOf`, and `skop_core` reads them with
-`OpSpec.from_op`. An op's parameters, their roles, and which of them are arrays
-are therefore read off its own signature rather than restated beside it — which
-is the whole point of decision 40, and why `array_params=` and `roles=` are
-gone.
+`demo/demo_ops.py` declares its ops with `skop.op` -- `@op()` for a workflow,
+`@op(env=...)` for an op that names an environment -- and types them with
+`skop.types` (`ImageOf`, `LabelsOf`). `skop_core` reads them with `skop.spec`,
+which caches the spec on the function. An op's parameters, their roles, and
+which of them are arrays are read off its own signature rather than restated
+beside it (decision 40), which is why `array_params=` and `roles=` are gone.
 
-One consequence to know before building anything that lists ops: `is_op`
-checks for the `__opspec__` attribute, so **a function decorated with
-scikit-ops' `@op` is not an op to us**. The Record panel can list opspec ops —
-today, the demo's three — and nothing else, until the two contracts are one.
+`is_op` checks for the `__skop__` attribute, so a scikit-ops op is an op to us
+and nothing else is; there is no second marker to check.
 
-## The two contracts, compared
+## Why opspec went
 
-They are the same module, implemented twice. `opspec/src/opspec/op.py` and
-`scikit-ops/src/skop/_spec.py` both define `Role`, `Slot`, `Axes`, `WILDCARD`,
-`CANONICAL`, `ALIASES`, `canonical`, `Choice`, `TypeSpec`, `ParamSpec`,
-`OutputSpec`, `OpSpec`, `type_spec`, `_is_ndarray`, `_wire_default` and the
-`role_of` / `axes_of` accessors — with the same values. Both say the same thing
-about why they must stay dependency-free, in almost the same words: scikit-ops'
-copy is "imported inside every worker environment, so it must depend on nothing
-beyond the standard library", and opspec's README says the same. That is also
-why swapping one for the other is cheap: opspec adds nothing to an environment.
+opspec and scikit-ops each implemented the same module -- `Role`, `Slot`,
+`Axes`, `Choice`, `TypeSpec`, `ParamSpec`, `OutputSpec`, `OpSpec`,
+`type_spec`, the wire vocabulary, the axis aliases -- with the same values and
+the same "standard library only" rule. Two copies of a shared contract drift,
+and these had, in both directions.
 
-They have drifted, in both directions:
+The design note that used to live here argued the opposite: delete scikit-ops'
+`_spec.py` and have it depend on opspec. That is the right *shape* -- one
+copy -- and the wrong *home*. The ops, their discovery, their runner and their
+environments are scikit-ops', and a front end must offer Cellpose before its
+environment exists, which is a fact about a collection of ops. So the
+specification is tracked where the collection is.
+
+The cost is a heavier dependency than the leaf opspec was: `skop` pulls
+numpy and declares appose. Neither reaches skop-workflows at import -- the
+spec module is standard library only, and `skop.runner` imports appose lazily
+-- but scikit-ops is not the zero-dependency package opspec was.
+
+## What the two had diverged on, and which side won
+
+scikit-ops' survivor answers, and therefore ours:
 
 | | opspec `op.py` | scikit-ops `_spec.py` |
 |---|---|---|
 | marker the decorator sets | `fn.__opspec__` | `fn.__skop__` |
-| spec from a function | `OpSpec.from_op(fn)` | `spec(fn)`, cached in `fn.__skop_spec__` |
+| how it is spelled | `@op` or `@op(env=...)` | `@op(...)`, always called |
+| the inputs a form builds from | `params` (all) | `inputs` (`params` minus `Out`) |
+| results | `outputs`, as `OutputSpec`s | `outputs` (names), `output_specs` (roles) |
+| spec from a function | `OpSpec.from_op(fn)` | `spec(fn)`, cached on `fn.__skop_spec__` |
 | what the decorator carries | `env` | `env`, `main_thread`, `exclusive` |
-| `Role` members | includes `boxes` | no `boxes`; boxes map to `Role.shapes` |
-| computation forms (`Out`, `Mut`, `Choices`, `ParamsFor`, `direction_of`, `choices_of`, `params_for_of`) | absent | present |
-| axis and wire vocabulary | present | present, the same |
+| computation forms (`Out`, `Mut`, `Choices`, `ParamsFor`) | absent | present |
+| `Role` members | includes `boxes` | no `boxes`; a box is a `Role.shapes` |
 | discovery | none | `discovery.py`: walk a package, read live signatures |
 
-Because the marker attribute differs, neither package recognises the other's
-ops: `is_op` in either returns `False` for a function decorated by the other.
+Three of these changed code, and are worth naming:
 
-## What would have to change, and where
+1. **`@op` is always called.** A workflow writes `@op()`, not `@op`: the
+   keyword-only signature would otherwise take the function as `env`.
+2. **`outputs` are names; `output_specs` carry the roles.** `Recorder._save`
+   needs only the names, so a single unnamed output is the string `'result'`
+   rather than an `OutputSpec`.
+3. **`Role.boxes` is gone.** A box is drawn as a `Role.shapes` everywhere in
+   this ecosystem; `skop.boxes` holds the converters.
 
-1. **scikit-ops deletes `_spec.py` and depends on opspec.** That is the
-   direction, because opspec is the dependency-free package whose stated job is
-   to be shared by plugins, runners and hosts, and because two copies of a
-   shared contract drift by construction — as the table shows they already
-   have. It is the deletion of a module, not a rewrite: the vocabulary matches.
-2. **First, fold scikit-ops' extras into opspec**, deciding each one's side:
-   - `Out`, `Mut`, `Choices`, `ParamsFor` and their accessors are
-     *declarations* — annotated markers, exactly like `Role` and `Axes` — so
-     they belong in opspec with the rest of the vocabulary.
-   - `main_thread` and `exclusive` are *execution* hints: they say how a runner
-     should call an op, not what the op is. opspec already owns the `Runner`
-     protocol, so they belong beside it, with `env` as the precedent.
-3. **`Role.boxes` goes the other way.** opspec has it; scikit-ops folds boxes
-   onto `Role.shapes`. A box is not a shape with arbitrary vertices — a front
-   end draws one as a rectangle and the other as a polygon — so `boxes` should
-   win, and it is a one-line change in whichever package survives.
-4. **Discovery stays in scikit-ops, and should.** opspec says nothing about
-   finding ops, and should not: discovery is a fact about *a collection* —
-   which package, which modules, and the rule that heavy imports live inside
-   the function body, which discovery is what enforces. None of that is part
-   of the contract an op declares.
-5. **One accessor name.** `spec(fn)` builds a cached spec; `OpSpec.from_op(fn)`
-   builds one. Pick one name. The cache is worth keeping, and is an
-   implementation detail the contract need not mention.
-
-## What we do meanwhile
-
-Nothing here. We do **not** write a bridge that builds an opspec `OpSpec` from
-a scikit-ops `OpSpec`, or the other way round: that is reimplementing the merge
-locally, and it would rot the day the merge lands (decision 43). So the
-collection appears in the Record panel when scikit-ops adopts opspec, and not
-before.
+One rule did not travel: a parameter must be JSON to be recordable, in
+`params.py`. scikit-ops has no such rule, because it records nothing.
 
 ## What is verified
 
-The table was read from `scikit-ops/src/skop/_spec.py` and
-`opspec/src/opspec/op.py` on 2026-10-06, on scikit-ops' `main`. The
-consequence for the panels — that a scikit-ops op is invisible to
-`opspec.op.is_op` — follows from the attribute check in each, and is the one
-claim here worth re-checking when either package moves.
+Read from `scikit-ops/src/skop/_spec.py`, `scikit-ops/src/skop/types.py` and
+`scikit-ops/src/skop/__init__.py` on 2026-10-06, on scikit-ops' `main`. The
+demo asserts the consequences in `demo/headless.py` (section 7e-bis): the demo
+ops are `skop.is_op`, an op naming no environment is a workflow, an op naming
+one is not, and the `Role` vocabulary has no `boxes`. Re-check the table when
+scikit-ops moves.

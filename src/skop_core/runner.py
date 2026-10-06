@@ -11,7 +11,8 @@ from collections.abc import Callable, Mapping
 from typing import Any, Protocol
 
 import numpy as np
-from opspec.op import NDARRAY, OpSpec, type_spec
+from skop import NDARRAY, OpSpec, type_spec
+from skop import spec as spec_of
 
 from .derived import Graph
 from .params import is_json, to_json
@@ -103,7 +104,7 @@ class Recorder:
     # -- running ---------------------------------------------------------
 
     def run(self, fn: Callable, step: str, args: dict[str, Any]) -> Any:
-        spec = OpSpec.from_op(fn)
+        spec = spec_of(fn)
         inputs = self._inputs(spec, args)
         params = {
             name: to_json(value)
@@ -227,11 +228,16 @@ class Recorder:
         return found
 
     def _save(self, spec: OpSpec, step: str, result: Any) -> dict[str, Handle]:
+        # ``OpSpec.outputs`` is a tuple of output *names* in scikit-ops -- the
+        # wire view, used to label task outputs -- so a single unnamed output
+        # is the string 'result' (or the Out/Mut parameter's name, or a
+        # NamedTuple's fields). ``output_specs`` carries the roles, which the
+        # host reads when it has a viewer to draw into.
         if len(spec.outputs) == 1:
-            return {spec.outputs[0].name: self.store.put(step, result)}
+            return {spec.outputs[0]: self.store.put(step, result)}
         return {
-            out.name: self.store.put(f'{step}.{out.name}', result[out.name])
-            for out in spec.outputs
+            name: self.store.put(f'{step}.{name}', result[name])
+            for name in spec.outputs
         }
 
     def _current_array(self, graph: Graph, handle: Handle) -> np.ndarray:

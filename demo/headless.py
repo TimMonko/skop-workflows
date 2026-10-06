@@ -19,9 +19,16 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'src'))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from demo_ops import connect, gaussian, otsu, percentile  # noqa: E402
-from opspec.op import OpSpec, Role  # noqa: E402
+from demo_ops import (  # noqa: E402
+    connect,
+    gaussian,
+    otsu,
+    percentile,
+    sharpen,
+)
 from scenario import blobs, session  # noqa: E402
+from skop import Role, is_op  # noqa: E402
+from skop import spec as spec_of  # noqa: E402
 
 from skop_core import (  # noqa: E402
     InProcess,
@@ -40,7 +47,7 @@ try:  # the Icechunk backend is an optional extra
 except ImportError:
     IcechunkStore = None
 
-REGISTRY = {OpSpec.from_op(fn).name: fn for fn in (percentile, gaussian, otsu)}
+REGISTRY = {spec_of(fn).name: fn for fn in (percentile, gaussian, otsu)}
 RESULTS: list[bool] = []
 
 
@@ -176,8 +183,8 @@ def main() -> int:
     )
 
     print('\n7e. what an op declares comes off its own annotation')
-    spec = OpSpec.from_op(gaussian)
-    otsu_spec = OpSpec.from_op(otsu)
+    spec = spec_of(gaussian)
+    otsu_spec = spec_of(otsu)
     check(
         "the parameters are the function's",
         [p.name for p in spec.params] == ['image', 'sigma'],
@@ -202,6 +209,24 @@ def main() -> int:
         'a bool default comes through as a bool',
         (otsu_spec.params[1].type, otsu_spec.params[1].default)
         == (bool, False),
+    )
+
+    print("\n7e-bis. the contract is scikit-ops' (decision 44)")
+    check(
+        'scikit-ops recognises the demo ops as ops',
+        all(is_op(fn) for fn in (percentile, gaussian, otsu, sharpen)),
+    )
+    check(
+        'an op naming no environment is a workflow',
+        all(spec_of(fn).is_workflow for fn in (percentile, gaussian, otsu)),
+    )
+    check(
+        'an op naming an environment is not',
+        spec_of(sharpen).env == 'demo' and not spec_of(sharpen).is_workflow,
+    )
+    check(
+        'boxes are shapes in this vocabulary: there is no Role.boxes',
+        not hasattr(Role, 'boxes') and hasattr(Role, 'shapes'),
     )
 
     print('\n7f. a revert clears an edit without deleting it')

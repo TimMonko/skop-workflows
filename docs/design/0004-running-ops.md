@@ -17,8 +17,8 @@ where layers are added and the graph is refreshed.
 
 ## Progress and cancellation
 
-opspec's `Runner.run` already takes `on_progress` and `on_start`, and
-scikit-ops relays sub-op progress and hands back a task for cancelling (see
+scikit-ops' `Runner.run` already takes `on_progress` and `on_start`, relays
+sub-op progress and hands back a task for cancelling (see
 [upstream.md](../upstream.md)). The recorder forwards both: the dock turns
 events into a row's progress and uses the task to cancel. A cancelled run
 should leave a record with `status='cancelled'`, which the recorder does not

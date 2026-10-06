@@ -28,7 +28,7 @@ Cubed asks for a chunk from zarr-python then zarr-python asks for that thing on 
 
 [Appose](https://github.com/apposed/appose) (inter-process shared memory, particularly for arrays) and [scikit-ops](https://github.com/apposed/scikit-ops) is currently the scikit-ops specification (of images, like types) and the ops/runner componenets and also contains all the wrapped functions. In particular, I have an interest at this time to use [appose-python](https://github.com/apposed/appose-python) to handle the interprocess and **environment** management. 
 
-Here also is the [opsspec](https://github.com/True-North-Intelligent-Algorithms/opspec) started as a fork to just define the spec, rather than combining the runner + spec + wrapped functions all into one library.
+Here also is the [opspec](https://github.com/True-North-Intelligent-Algorithms/opspec) fork, started to define the spec separately from the runner, spec and wrapped functions all in one library. It stayed a prototype, and the specification is tracked in scikit-ops instead (decision 44).
 
 Current **known issues that are in scope** for appose and scikit-ops are quality interprocess chunked format communication. 
 

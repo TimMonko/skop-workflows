@@ -1,19 +1,23 @@
-"""Three ops, numpy only, so the demo needs no environment built.
+"""Ops, numpy only, so the demo needs no environment built.
 
-They stand in for the scikit-ops ops the real demo will use; the shape of a run
-is the same either way. Each one declares itself the way opspec asks -- what
-its data *means* and what type each parameter is -- so a host reads the op
-instead of being told about it.
+They are declared exactly the way scikit-ops asks -- the contract this repo
+tracks (decision 44) -- and stand in for the real scikit-ops ops the demo will
+use one day. Each one declares what its data *means* and what type each
+parameter is, so a host reads the op instead of being told about it.
+
+``@op()`` with no environment is a *workflow*: it runs wherever the caller is.
+``sharpen`` names one instead, so the demo can show what an op that is not a
+workflow looks like to the recorder; nothing here builds that environment.
 """
 
 from __future__ import annotations
 
 import numpy as np
-from opspec.op import op
-from opspec.types import ImageOf, LabelsOf
+from skop import op
+from skop.types import ImageOf, LabelsOf
 
 
-@op
+@op()
 def percentile(
     image: ImageOf[np.ndarray], low: float = 1.0, high: float = 99.8
 ) -> ImageOf[np.ndarray]:
@@ -27,7 +31,7 @@ def percentile(
     return np.clip((image - lo) / span, 0.0, 1.0)
 
 
-@op
+@op()
 def gaussian(
     image: ImageOf[np.ndarray], sigma: float = 2.0
 ) -> ImageOf[np.ndarray]:
@@ -41,7 +45,7 @@ def gaussian(
     return out
 
 
-@op
+@op()
 def otsu(
     image: ImageOf[np.ndarray], invert: bool = False
 ) -> LabelsOf[np.ndarray]:
@@ -64,7 +68,7 @@ def otsu(
     return mask <= threshold if invert else mask > threshold
 
 
-@op
+@op()
 def connect(labels: LabelsOf[np.ndarray]) -> LabelsOf[np.ndarray]:
     """Number the connected components of a mask, four-connected."""
     mask = np.asarray(labels, dtype=bool)
@@ -89,6 +93,20 @@ def connect(labels: LabelsOf[np.ndarray]) -> LabelsOf[np.ndarray]:
                 stack.append((y, x - 1))
                 stack.append((y, x + 1))
     return out
+
+
+@op(env='demo')
+def sharpen(image: ImageOf[np.ndarray]) -> ImageOf[np.ndarray]:
+    """A stand-in for an op that names an environment, not a workflow.
+
+    The recorder reads its spec exactly as it reads any other op's; what
+    differs is that ``OpSpec.env`` is set, so a host knows the op belongs in
+    scikit-ops' ``envs/demo/`` rather than wherever the caller is. Nothing in
+    this repo builds that environment -- the real ones live in scikit-ops --
+    so this op exists only so the demo can show the spec's own account of the
+    difference (decision 44).
+    """
+    return image + (image - gaussian(image, sigma=1.0))
 
 
 def _kernel(sigma: float) -> np.ndarray:

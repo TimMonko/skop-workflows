@@ -22,6 +22,15 @@ wheels = [
 ]
 
 [[package]]
+name = "appose"
+version = "0.12.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/3c/8d/1203e933693d885f88465d18143346b6b20322ac40c14f98d3b7ea70ef4e/appose-0.12.0.tar.gz", hash = "sha256:2f73eaac3db95f9666ba5d2a2a89600b2605ff45fbf7f05afdbd368503ce2f53", size = 67896, upload-time = "2026-07-28T17:20:42.574Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/33/12/969743e8b7150d13b654756f3bb927c4a916747e16742c0e202e9a5e6a66/appose-0.12.0-py3-none-any.whl", hash = "sha256:5c36f8293e824b049deb7393c53a46066ad67625f2de8ccb7f662eaa94ef5c80", size = 75171, upload-time = "2026-07-28T17:20:41.328Z" },
+]
+
+[[package]]
 name = "cffi"
 version = "2.1.1"
 source = { registry = "https://pypi.org/simple" }
@@ -1593,20 +1602,6 @@ wheels = [
 ]
 
 [[package]]
-name = "opspec"
-version = "0.1.0.dev0"
-source = { editable = "../opspec" }
-
-[package.metadata]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "numpy" },
-    { name = "pytest" },
-    { name = "ruff" },
-]
-
-[[package]]
 name = "packaging"
 version = "26.3"
 source = { registry = "https://pypi.org/simple" }
@@ -1997,6 +1992,42 @@ wheels = [
 ]
 
 [[package]]
+name = "scikit-ops"
+version = "0.1.0.dev0"
+source = { editable = "../scikit-ops" }
+dependencies = [
+    { name = "appose" },
+    { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
+    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.11.*'" },
+    { name = "numpy", version = "2.5.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "appose", specifier = ">=0.12" },
+    { name = "numpy" },
+]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "build" },
+    { name = "mypy" },
+    { name = "pytest" },
+    { name = "ruff" },
+    { name = "toml" },
+    { name = "validate-pyproject", extras = ["all"] },
+]
+examples = [
+    { name = "ipykernel" },
+    { name = "jupyterlab" },
+    { name = "matplotlib" },
+    { name = "napari", extras = ["pyqt6"] },
+    { name = "scikit-image" },
+    { name = "tifffile" },
+    { name = "tnia-python", extras = ["plotting"], specifier = ">=0.2.2" },
+]
+
+[[package]]
 name = "six"
 version = "1.17.0"
 source = { registry = "https://pypi.org/simple" }
@@ -2013,7 +2044,7 @@ dependencies = [
     { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
     { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.11.*'" },
     { name = "numpy", version = "2.5.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
-    { name = "opspec" },
+    { name = "scikit-ops" },
 ]
 
 [package.dev-dependencies]
@@ -2036,7 +2067,7 @@ viz = [
 [package.metadata]
 requires-dist = [
     { name = "numpy", specifier = ">=1.26" },
-    { name = "opspec", editable = "../opspec" },
+    { name = "scikit-ops", editable = "../scikit-ops" },
 ]
 
 [package.metadata.requires-dev]
