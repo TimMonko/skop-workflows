@@ -107,3 +107,9 @@ Promoted decisions move into [`adr/`](adr/); their numbers stay here.
     an output name with a different op adds a run rather than starting a
     step; two unrelated outputs that share a name merge, and the remedy is to
     name them differently.
+34. **Accepting an edit detaches the step: it is stored, and replay treats
+    it as a root.** The host hands the accepted pixels to the recorder, which
+    puts them under the step name; the step then has no producing op in a
+    recipe, and its consumers list it as a root to supply at replay. Not
+    built yet: it waits for the napari host that can pass the painted array;
+    until then `accept_edit` only clears the edited mark.
