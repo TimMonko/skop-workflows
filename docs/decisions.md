@@ -163,3 +163,10 @@ Promoted decisions move into [`adr/`](adr/); their numbers stay here.
     step; `produce(targets, registry)` walks the closure in order and updates
     whatever is stale. All three are about runs and stores rather than layers,
     and each takes the op, because a recorder resolves no IDs (decision 2).
+43. **We do not bridge the two op contracts.** opspec's `@op` and scikit-ops'
+    `@op` set different markers (`__opspec__`, `__skop__`), so neither
+    recognises the other's ops. Building one spec from the other would be
+    reimplementing the merge locally and would rot the day it lands, so we use
+    opspec's and wait — see
+    [design note 0005](design/0005-the-op-contract.md) for what scikit-ops
+    would have to change.

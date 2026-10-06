@@ -50,6 +50,9 @@ worktree of its branch `recorder_and_icechunk`, `C:\Users\Tim\opspec`,
   on_start, **kwargs)`, blocking, plus `close()`. `Builder` builds
   environments.
 - No op version, no cost hint, no determinism flag, no recording.
+- The same contract is implemented a second time in `skop/_spec.py`, and the
+  two copies have drifted apart in both directions — see
+  [design note 0005](design/0005-the-op-contract.md).
 
 ## scikit-ops
 
