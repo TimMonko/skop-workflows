@@ -201,3 +201,13 @@ Promoted decisions move into [`adr/`](adr/); their numbers stay here.
     recorder's registry. A recipe still holds no callable (decision 2).
 47. **An optional array that was not given is not an input.** It is recorded
     as the parameter it is, `None`; an `Out` buffer is never an input.
+48. **An input that loses its layer is *missing*, not stale.** Deleting the
+    layer behind a root appends a `Detached` record. Steps that read it wear a
+    `missing` badge: nothing newer exists to catch up with and the data is
+    still in the store, so Produce has nothing to do, but the step can no
+    longer be reproduced from the session it was made in. Declaring the name
+    again undoes it, and moves the root, which does make its readers stale.
+49. **An input is a name, and any layer can stand behind it.** Choosing
+    another layer for an input stores that layer's pixels under the same name,
+    so the steps that read it are stale and Produce brings them up to date on
+    the new one. A root keeps its name when its layer is renamed.
