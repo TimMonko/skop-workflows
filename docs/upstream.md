@@ -89,6 +89,16 @@ Branch `recorder_and_icechunk` of scikit-ops: `src/skop/record.py`,
 - Image and Labels can be lazy (dask, zarr). Points, Shapes, Surface, Tracks
   and Vectors are in-memory arrays plus a `features` DataFrame, or meshes.
 
+## ndv
+
+- Checked 2026-10-05. A viewer, not a renderer: it shows arrays in Qt, wx or
+  Jupyter, with no browser-native frontend. The Jupyter frontend requires an
+  IPython `ZMQInteractiveShell` and is built on `jupyter_rfb` + `ipywidgets`,
+  so it does not render in marimo (tested: the app stays blank). `ndv.imshow`
+  also calls `run_app()`, which assumes a GUI event loop. The Qt frontend
+  (`ndv[qt]`) is the candidate for the future napari host; the marimo app
+  keeps its matplotlib thumbnails.
+
 ## Older approaches (not carried over)
 
 - ndev-workflows' graph is a dask-style task dict executed by
