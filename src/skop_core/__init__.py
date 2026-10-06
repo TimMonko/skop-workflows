@@ -4,7 +4,13 @@ from .derived import Graph
 from .params import is_json, to_json
 from .recipe import batch, export, plan, replay
 from .record import ACCEPTED, EDITED, REVERTED, Event, Handle, Root, Run
-from .runner import InProcess, MissingRoot, Recorder, Runner
+from .runner import (
+    InProcess,
+    MissingRoot,
+    Recorder,
+    RecordingRunner,
+    Runner,
+)
 from .store import SimpleStore, Store
 
 __all__ = [
@@ -17,6 +23,7 @@ __all__ = [
     'InProcess',
     'MissingRoot',
     'Recorder',
+    'RecordingRunner',
     'Root',
     'Run',
     'Runner',

@@ -33,8 +33,21 @@ class Graph:
 
     # -- steps -----------------------------------------------------------
 
-    def steps(self) -> list[str]:
-        return list(self.by_step)
+    def steps(self, nested: bool = False) -> list[str]:
+        """The steps the log describes, in the order they first ran.
+
+        A step only ever run from inside a workflow is that workflow's detail
+        rather than a step of its own, and is left out unless asked for.
+        """
+        return [
+            step
+            for step, runs in self.by_step.items()
+            if nested or any(run.parent is None for run in runs)
+        ]
+
+    def children_of(self, run: Run) -> list[Run]:
+        """The runs a workflow's run made, in the order they happened."""
+        return [r for r in self.runs if r.parent == run.id]
 
     def runs_of(self, step: str) -> list[Run]:
         return list(self.by_step.get(step, ()))
@@ -127,7 +140,7 @@ class Graph:
     def leaves(self) -> list[str]:
         """Steps no current run consumes: the default targets."""
         consumed = set()
-        for step in self.by_step:
+        for step in self.steps():
             run = self.current(step)
             if run is None:
                 continue
@@ -136,5 +149,5 @@ class Graph:
                 if upstream is not None:
                     consumed.add(upstream.step)
         return [
-            s for s in self.by_step if s not in consumed and self.current(s)
+            s for s in self.steps() if s not in consumed and self.current(s)
         ]

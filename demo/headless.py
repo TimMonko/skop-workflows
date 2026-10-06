@@ -19,21 +19,29 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'src'))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+import skop  # noqa: E402
 from demo_ops import (  # noqa: E402
+    blur_then_threshold,
     connect,
     gaussian,
     otsu,
     percentile,
     sharpen,
+    smooth_then_threshold,
 )
 from scenario import blobs, session  # noqa: E402
-from skop import Role, is_op  # noqa: E402
-from skop import spec as spec_of  # noqa: E402
+from skop import (  # noqa: E402
+    OpSpec,  # noqa: E402
+    Role,
+    ambient,
+    is_op,
+)
 
 from skop_core import (  # noqa: E402
     InProcess,
     MissingRoot,
     Recorder,
+    RecordingRunner,
     Run,
     batch,
     export,
@@ -47,7 +55,7 @@ try:  # the Icechunk backend is an optional extra
 except ImportError:
     IcechunkStore = None
 
-REGISTRY = {spec_of(fn).name: fn for fn in (percentile, gaussian, otsu)}
+REGISTRY = {OpSpec.from_op(fn).name: fn for fn in (percentile, gaussian, otsu)}
 RESULTS: list[bool] = []
 
 
@@ -183,8 +191,8 @@ def main() -> int:
     )
 
     print('\n7e. what an op declares comes off its own annotation')
-    spec = spec_of(gaussian)
-    otsu_spec = spec_of(otsu)
+    spec = OpSpec.from_op(gaussian)
+    otsu_spec = OpSpec.from_op(otsu)
     check(
         "the parameters are the function's",
         [p.name for p in spec.params] == ['image', 'sigma'],
@@ -218,15 +226,19 @@ def main() -> int:
     )
     check(
         'an op naming no environment is a workflow',
-        all(spec_of(fn).is_workflow for fn in (percentile, gaussian, otsu)),
+        all(
+            OpSpec.from_op(fn).is_workflow
+            for fn in (percentile, gaussian, otsu)
+        ),
     )
     check(
         'an op naming an environment is not',
-        spec_of(sharpen).env == 'demo' and not spec_of(sharpen).is_workflow,
+        OpSpec.from_op(sharpen).env == 'demo'
+        and not OpSpec.from_op(sharpen).is_workflow,
     )
     check(
-        'boxes are shapes in this vocabulary: there is no Role.boxes',
-        not hasattr(Role, 'boxes') and hasattr(Role, 'shapes'),
+        'boxes have a role of their own, apart from freeform shapes',
+        hasattr(Role, 'boxes') and hasattr(Role, 'shapes'),
     )
 
     print('\n7f. a revert clears an edit without deleting it')
@@ -419,6 +431,115 @@ def main() -> int:
                 for step in chunk_second.graph().steps()
             ),
         )
+
+    print('\n12. a workflow, run through a runner that is listening')
+    listening = session(work, 'listening')
+    listener = RecordingRunner(listening)
+    listening.root('image', image)
+    told: list[str] = []
+    mask = listener.run(
+        smooth_then_threshold,
+        {'image': image, 'sigma': 3.0},
+        on_recorded=told.append,
+        # What a real runner takes besides the op's arguments: passed through
+        # to the inner runner, which here has no use for it.
+        on_progress=print,
+    )
+    graph = listening.graph()
+    parent = graph.current('smooth_then_threshold')
+    children = graph.children_of(parent)
+    check(
+        'the workflow is recorded, and so is each op it called',
+        parent is not None
+        and [c.op.rpartition(':')[2] for c in children]
+        == ['gaussian', 'otsu'],
+    )
+    check(
+        'a call inside a workflow is named for the workflow it is in',
+        [c.step for c in children]
+        == ['smooth_then_threshold.gaussian', 'smooth_then_threshold.otsu'],
+    )
+    check(
+        'the workflow is the step, and the ops are its detail',
+        graph.steps() == ['smooth_then_threshold']
+        and len(graph.steps(nested=True)) == 3
+        and graph.leaves() == ['smooth_then_threshold'],
+    )
+    check(
+        'lineage runs through the workflow: the threshold read the blur',
+        children[1].inputs['image'] == children[0].outputs['result'],
+    )
+    check(
+        'the workflow read the root, and parameters are recorded as JSON',
+        parent.inputs == {'image': 'image@v1'}
+        and parent.params == {'sigma': 3.0}
+        and children[0].params == {'sigma': 3.0},
+    )
+    check(
+        'the caller is told the step once, and only for the outer call',
+        told == ['smooth_then_threshold'],
+    )
+    check(
+        'the result is what the workflow returned',
+        np.array_equal(mask, listening.store.get(parent.outputs['result'])),
+    )
+
+    print('\n12b. a script that calls skop.run, with a recorder installed')
+    scripted = session(work, 'scripted')
+    scripted.root('image', image)
+    with ambient(RecordingRunner(scripted)):
+        skop.run(gaussian, {'image': image, 'sigma': 2.0})
+    check(
+        'a plain skop.run is recorded, with no panel in sight',
+        scripted.graph().steps() == ['gaussian'],
+    )
+
+    print('\n12c. a failure inside a workflow')
+    try:
+        listener.run(smooth_then_threshold, {'image': image, 'sigma': -1.0})
+    except ValueError:
+        graph = listening.graph()
+        failed = [r for r in graph.runs if r.status == 'failed']
+        check(
+            'the op that failed and the workflow around it are both recorded',
+            {r.step for r in failed}
+            == {'smooth_then_threshold', 'smooth_then_threshold.gaussian'},
+        )
+        check(
+            'neither failure becomes current',
+            graph.current('smooth_then_threshold').id == parent.id,
+        )
+    else:
+        check('a failure inside a workflow is raised', False)
+
+    print('\n12d. a workflow handed an op as a parameter')
+    handed = session(work, 'handed')
+    handed.root('image', image)
+    handed_listener = RecordingRunner(handed)
+    handed_listener.run(
+        blur_then_threshold, {'image': image, 'blur': gaussian}
+    )
+    run = handed.graph().current('blur_then_threshold')
+    check(
+        'an op given as a parameter is recorded as its ID, which is JSON',
+        run.params == {'blur': OpSpec.from_op(gaussian).name}
+        and is_json(run.params),
+    )
+    handed.rerun(blur_then_threshold, 'blur_then_threshold')
+    check(
+        'a run again takes the ID back to the op, and records it',
+        len(handed.graph().runs_of('blur_then_threshold')) == 2,
+    )
+    try:
+        handed.run(
+            blur_then_threshold,
+            'blur_then_threshold',
+            {'image': image, 'blur': 'demo_ops:nowhere'},
+        )
+    except KeyError as error:
+        check('an ID that names no op is refused', 'nowhere' in str(error))
+    else:
+        check('an ID that names no op is refused', False)
 
     print(f'\nstore layout, under {work}')
     for path in sorted(work.rglob('*')):

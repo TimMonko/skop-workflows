@@ -23,7 +23,7 @@ REVERTED = 'reverted'
 
 @dataclass(frozen=True)
 class Run:
-    """One invocation of an op."""
+    """One invocation of an op, however it was started."""
 
     id: str
     step: str
@@ -34,6 +34,10 @@ class Run:
     status: str = 'ok'
     error: str | None = None
     op_version: str | None = None
+    #: The run of the workflow that called this one, when a workflow did. A
+    #: workflow's own run is the whole call and its nested runs are what it
+    #: did; the graph shows the first and keeps the second as detail.
+    parent: str | None = None
 
     @property
     def kind(self) -> str:

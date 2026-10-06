@@ -1602,6 +1602,20 @@ wheels = [
 ]
 
 [[package]]
+name = "opspec"
+version = "0.1.0.dev0"
+source = { editable = "../scikit-ops/opspec" }
+
+[package.metadata]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "numpy" },
+    { name = "pytest" },
+    { name = "ruff" },
+]
+
+[[package]]
 name = "packaging"
 version = "26.3"
 source = { registry = "https://pypi.org/simple" }
@@ -2000,12 +2014,14 @@ dependencies = [
     { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
     { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.11.*'" },
     { name = "numpy", version = "2.5.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
+    { name = "opspec" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "appose", specifier = ">=0.12" },
     { name = "numpy" },
+    { name = "opspec", editable = "../scikit-ops/opspec" },
 ]
 
 [package.metadata.requires-dev]

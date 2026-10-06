@@ -12,8 +12,12 @@ workflow looks like to the recorder; nothing here builds that environment.
 
 from __future__ import annotations
 
+from collections.abc import Callable
+from typing import Annotated
+
 import numpy as np
-from skop import op
+import skop
+from skop import Choices, op
 from skop.types import ImageOf, LabelsOf
 
 
@@ -93,6 +97,29 @@ def connect(labels: LabelsOf[np.ndarray]) -> LabelsOf[np.ndarray]:
                 stack.append((y, x - 1))
                 stack.append((y, x + 1))
     return out
+
+
+@op()
+def smooth_then_threshold(
+    image: ImageOf[np.ndarray], sigma: float = 2.0
+) -> LabelsOf[np.ndarray]:
+    """Blur, then threshold: a workflow, which calls ops rather than being one.
+
+    It reaches the two ops through ``skop.run`` rather than calling them, so
+    whichever runner started the workflow is the one that runs them -- which
+    is how a recorder, standing where the runner stood, sees both.
+    """
+    smoothed = skop.run(gaussian, {'image': image, 'sigma': sigma})
+    return skop.run(otsu, {'image': smoothed})
+
+
+@op()
+def blur_then_threshold(
+    image: ImageOf[np.ndarray],
+    blur: Annotated[Callable, Choices(gaussian=gaussian)] = gaussian,
+) -> LabelsOf[np.ndarray]:
+    """A workflow that is handed an op: which blur to use is a parameter."""
+    return skop.run(otsu, {'image': skop.run(blur, {'image': image})})
 
 
 @op(env='demo')
