@@ -68,6 +68,38 @@ def info(fn: Callable) -> OpInfo:
     return found
 
 
+def to_json(value: Any) -> Any:
+    """The value as it will be recorded.
+
+    Containers are rebuilt, and a stand-in scalar -- a numpy scalar, say -- is
+    unwrapped through its own ``item()``. Everything else passes through for
+    :func:`is_json` to judge. This module stays free of numpy, because it
+    mirrors the stdlib-only spec it is meant to be proposed back to.
+    """
+    if isinstance(value, (bool, int, float, str)) or value is None:
+        return value
+    if isinstance(value, (list, tuple)):
+        return [to_json(item) for item in value]
+    if isinstance(value, dict):
+        return {key: to_json(item) for key, item in value.items()}
+    item = getattr(value, 'item', None)
+    if callable(item):
+        try:
+            return to_json(item())
+        except (TypeError, ValueError):
+            return value
+    return value
+
+
 def is_json(value: Any) -> bool:
-    """Whether a parameter value can live in a recipe unchanged."""
-    return value is None or isinstance(value, (bool, int, float, str))
+    """Whether a value can live in a recipe: JSON scalars and containers."""
+    if value is None or isinstance(value, (bool, int, float, str)):
+        return True
+    if isinstance(value, (list, tuple)):
+        return all(is_json(item) for item in value)
+    if isinstance(value, dict):
+        return all(
+            isinstance(key, str) and is_json(item)
+            for key, item in value.items()
+        )
+    return False

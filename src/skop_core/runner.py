@@ -13,7 +13,7 @@ from typing import Any, Protocol
 import numpy as np
 
 from .derived import Graph
-from .op import OpInfo, info, is_json
+from .op import OpInfo, info, is_json, to_json
 from .record import ACCEPTED, EDITED, Event, Handle, Run
 from .store import Store
 
@@ -86,7 +86,11 @@ class Recorder:
     def run(self, fn: Callable, step: str, args: dict[str, Any]) -> Any:
         spec = info(fn)
         inputs = self._inputs(spec, args)
-        params = {k: v for k, v in args.items() if k not in inputs}
+        params = {
+            name: to_json(value)
+            for name, value in args.items()
+            if name not in inputs
+        }
         for name, value in params.items():
             if not is_json(value):
                 raise TypeError(

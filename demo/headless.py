@@ -27,6 +27,7 @@ from skop_core import (  # noqa: E402
     batch,
     export,
     info,
+    is_json,
     replay,
 )
 from skop_visual import to_mermaid, view  # noqa: E402
@@ -135,6 +136,36 @@ def main() -> int:
         view(recorder.graph(), store=recorder.store, targets=['components'])
     )
     check('an affected step is drawn', ':::affected' in downstream)
+
+    print('\n7c. leaves come from current runs only')
+    alt = session(work, 'leaves-check')
+    alt_image = blobs(seed=11)
+    alt.root('image', alt_image)
+    alt_normalized = alt.run(
+        percentile,
+        'normalized',
+        {'image': alt_image, 'low': 1.0, 'high': 99.8},
+    )
+    alt.run(gaussian, 'smoothed', {'image': alt_normalized, 'sigma': 2.0})
+    alt.run(gaussian, 'smoothed', {'image': alt_image, 'sigma': 2.0})
+    check(
+        'a superseded consumer no longer hides a leaf',
+        'normalized' in alt.graph().leaves(),
+    )
+
+    print('\n7d. parameters are JSON, numpy scalars included')
+    check(
+        'JSON containers are allowed, objects are not',
+        is_json({'sigmas': [1, 2.5, None]}) and not is_json(object()),
+    )
+    misc = session(work, 'params-check')
+    misc_image = blobs(seed=12)
+    misc.root('image', misc_image)
+    misc.run(otsu, 'labels', {'image': misc_image, 'invert': np.True_})
+    check(
+        'a numpy scalar parameter is stored as plain JSON',
+        misc.graph().current('labels').params == {'invert': True},
+    )
 
     print('\n8. replay on another image, in a store of its own')
     second = session(work, 'replay-second')

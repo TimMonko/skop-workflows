@@ -1,7 +1,7 @@
 """skop_core: recordable, replayable workflows made of ops."""
 
 from .derived import Graph
-from .op import OpInfo, Output, info, op
+from .op import OpInfo, Output, info, is_json, op
 from .recipe import batch, export, plan, replay
 from .record import ACCEPTED, EDITED, Event, Handle, Run
 from .runner import InProcess, MissingRoot, Recorder, Runner
@@ -25,6 +25,7 @@ __all__ = [
     'batch',
     'export',
     'info',
+    'is_json',
     'op',
     'plan',
     'replay',

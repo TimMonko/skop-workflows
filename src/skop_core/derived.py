@@ -102,7 +102,10 @@ class Graph:
     def leaves(self) -> list[str]:
         """Steps no current run consumes: the default targets."""
         consumed = set()
-        for run in self.runs:
+        for step in self.by_step:
+            run = self.current(step)
+            if run is None:
+                continue
             for handle in run.inputs.values():
                 upstream = self.producer(handle)
                 if upstream is not None:
