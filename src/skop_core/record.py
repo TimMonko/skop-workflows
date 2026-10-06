@@ -19,6 +19,7 @@ ROOT = 'root'
 EDITED = 'edited'
 ACCEPTED = 'accepted'
 REVERTED = 'reverted'
+DETACHED = 'detached'
 
 
 @dataclass(frozen=True)
@@ -77,6 +78,31 @@ class Root:
 
 
 @dataclass(frozen=True)
+class Detached:
+    """A root that is no longer there: its layer was deleted.
+
+    Nothing about the data is lost -- the store still holds every version --
+    but the session can no longer say where the root is *from*, and whoever
+    read it should say so. Declaring the name again brings it back, and the
+    order of the log is what says which of the two came last.
+    """
+
+    id: str
+    name: str
+
+    @property
+    def kind(self) -> str:
+        return DETACHED
+
+    def to_dict(self) -> dict[str, Any]:
+        return {'kind': DETACHED, **self.__dict__}
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> Detached:
+        return cls(**{k: v for k, v in data.items() if k != 'kind'})
+
+
+@dataclass(frozen=True)
 class Event:
     """A mark on an existing run: hand-edited, or the edit accepted."""
 
@@ -103,9 +129,11 @@ class Event:
         )
 
 
-def from_dict(data: dict[str, Any]) -> Run | Root | Event:
+def from_dict(data: dict[str, Any]) -> Run | Root | Detached | Event:
     if data['kind'] == RUN:
         return Run.from_dict(data)
     if data['kind'] == ROOT:
         return Root.from_dict(data)
+    if data['kind'] == DETACHED:
+        return Detached.from_dict(data)
     return Event.from_dict(data)

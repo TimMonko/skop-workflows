@@ -3,7 +3,17 @@
 from .derived import Graph
 from .params import is_json, to_json
 from .recipe import batch, export, plan, replay
-from .record import ACCEPTED, EDITED, REVERTED, Event, Handle, Root, Run
+from .record import (
+    ACCEPTED,
+    DETACHED,
+    EDITED,
+    REVERTED,
+    Detached,
+    Event,
+    Handle,
+    Root,
+    Run,
+)
 from .runner import (
     InProcess,
     MissingRoot,
@@ -15,8 +25,10 @@ from .store import SimpleStore, Store
 
 __all__ = [
     'ACCEPTED',
+    'DETACHED',
     'EDITED',
     'REVERTED',
+    'Detached',
     'Event',
     'Graph',
     'Handle',

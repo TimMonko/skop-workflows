@@ -17,7 +17,7 @@ from typing import Any, Protocol
 
 import numpy as np
 
-from .record import Event, Handle, Root, Run, from_dict
+from .record import Detached, Event, Handle, Root, Run, from_dict
 
 _HANDLE = re.compile(r'^(?P<path>.+)@v(?P<version>\d+)$')
 
@@ -37,9 +37,9 @@ class Store(Protocol):
         """What a handle is, without resolving it: its name, ndim and dtype."""
         ...
 
-    def append(self, record: Run | Root | Event) -> None: ...
+    def append(self, record: Run | Root | Detached | Event) -> None: ...
 
-    def records(self) -> list[Run | Root | Event]: ...
+    def records(self) -> list[Run | Root | Detached | Event]: ...
 
 
 class SimpleStore:
@@ -92,11 +92,11 @@ class SimpleStore:
 
     # -- records ---------------------------------------------------------
 
-    def append(self, record: Run | Root | Event) -> None:
+    def append(self, record: Run | Root | Detached | Event) -> None:
         with self._lock, self.log_path.open('a', encoding='utf-8') as stream:
             stream.write(json.dumps(record.to_dict()) + '\n')
 
-    def records(self) -> list[Run | Root | Event]:
+    def records(self) -> list[Run | Root | Detached | Event]:
         with self._lock:
             if not self.log_path.exists():
                 return []

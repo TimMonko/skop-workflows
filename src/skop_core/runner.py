@@ -26,7 +26,16 @@ from skop import NDARRAY, OpSpec, is_op, type_spec
 
 from .derived import Graph
 from .params import is_json, to_json
-from .record import ACCEPTED, EDITED, REVERTED, Event, Handle, Root, Run
+from .record import (
+    ACCEPTED,
+    EDITED,
+    REVERTED,
+    Detached,
+    Event,
+    Handle,
+    Root,
+    Run,
+)
 from .store import Store
 
 
@@ -108,6 +117,17 @@ class Recorder:
         handle = self.store.put(name, array)
         self.store.append(Root(id=_new_id(), name=name, handle=handle))
         return handle
+
+    def root_gone(self, name: str) -> Detached:
+        """Record that an input's layer is no longer there.
+
+        The data is kept, and a step that read it still says what it read. The
+        mark is what lets the graph say the input has no home any more, until
+        the name is declared again.
+        """
+        record = Detached(id=_new_id(), name=name)
+        self.store.append(record)
+        return record
 
     def graph(self) -> Graph:
         return Graph(self.store.records())

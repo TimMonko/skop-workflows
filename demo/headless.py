@@ -48,7 +48,14 @@ from skop_core import (  # noqa: E402
     is_json,
     replay,
 )
-from skop_visual import to_mermaid, view  # noqa: E402
+from skop_visual import (  # noqa: E402
+    MISSING,
+    STALE,
+    layout,
+    lineage,
+    to_mermaid,
+    view,
+)
 
 try:  # the Icechunk backend is an optional extra
     from skop_core.icechunk_store import IcechunkStore  # noqa: E402
@@ -540,6 +547,68 @@ def main() -> int:
         check('an ID that names no op is refused', 'nowhere' in str(error))
     else:
         check('an ID that names no op is refused', False)
+
+    print('\n13. the path a result took, and an input that went away')
+    tracing = session(work, 'tracing')
+    tracing.root('image', image)
+    flat = tracing.run(percentile, 'normalized', {'image': image})
+    blur = tracing.run(gaussian, 'smoothed', {'image': flat})
+    tracing.run(otsu, 'labels', {'image': blur})
+    tracing.run(gaussian, 'side', {'image': flat, 'sigma': 5.0})
+    graph = tracing.graph()
+    path = lineage(graph, 'labels')
+    check(
+        'a result knows what it came from, oldest first, and the roots',
+        path.upstream == ('normalized', 'smoothed')
+        and path.roots == ('image',),
+    )
+    check(
+        'and what comes from a step, on every branch',
+        lineage(graph, 'normalized').downstream
+        == ('smoothed', 'labels', 'side'),
+    )
+    check(
+        'a step off the path is not on it',
+        not path.touches('side') and path.touches('root:image'),
+    )
+    grid = layout(view(graph, store=tracing.store))
+    cols = {n.key: n.col for n in grid.nodes}
+    check(
+        'the layout runs left to right, roots first',
+        cols
+        == {
+            'root:image': 0,
+            'normalized': 1,
+            'smoothed': 2,
+            'side': 2,
+            'labels': 3,
+        }
+        and all(cols[a] < cols[b] for a, b, _ in grid.edges),
+    )
+    check(
+        'two branches do not share a place',
+        len({(n.col, n.row) for n in grid.nodes}) == len(grid.nodes),
+    )
+
+    tracing.root_gone('image')
+    after = view(tracing.graph(), store=tracing.store)
+    badges = {n.step: n.badge for n in after.nodes}
+    check(
+        'a step whose input went away says so, and is not stale',
+        badges['normalized'] == MISSING
+        and not tracing.graph().is_stale('normalized'),
+    )
+    check(
+        'the steps that read it second-hand are untouched',
+        badges['smoothed'] != MISSING and after.gone == ('image',),
+    )
+    tracing.root('image', blobs(seed=9))
+    back = view(tracing.graph(), store=tracing.store)
+    badges = {n.step: n.badge for n in back.nodes}
+    check(
+        'declaring the name again brings it back, and moves it under its readers',
+        not back.gone and badges['normalized'] == STALE,
+    )
 
     print(f'\nstore layout, under {work}')
     for path in sorted(work.rglob('*')):

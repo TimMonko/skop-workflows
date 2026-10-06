@@ -6,16 +6,24 @@ it was edited, and what a set of targets needs are all read off the log.
 
 from __future__ import annotations
 
-from .record import EDITED, Event, Handle, Root, Run
+from .record import EDITED, Detached, Event, Handle, Root, Run
 
 
 class Graph:
     """The steps a log describes, and the questions a host asks about them."""
 
-    def __init__(self, records: list[Run | Root | Event]) -> None:
+    def __init__(self, records: list[Run | Root | Detached | Event]) -> None:
         self.runs = [r for r in records if isinstance(r, Run)]
         self.roots = [r for r in records if isinstance(r, Root)]
         self.events = [e for e in records if isinstance(e, Event)]
+        #: The roots whose newest record says they went away. Read in log
+        #: order, so declaring a name again after it was detached undoes it.
+        self.gone: set[str] = set()
+        for record in records:
+            if isinstance(record, Detached):
+                self.gone.add(record.name)
+            elif isinstance(record, Root):
+                self.gone.discard(record.name)
         self.by_step: dict[str, list[Run]] = {}
         for run in self.runs:
             self.by_step.setdefault(run.step, []).append(run)
@@ -97,6 +105,24 @@ class Graph:
                 return True
         return False
 
+    def missing_inputs(self, step: str) -> list[str]:
+        """The roots the step read whose layer has since gone.
+
+        Not staleness: nothing newer exists to bring the step up to date with,
+        and the data it read is still in the store. What is lost is where the
+        data came from, so the step can be read but no longer reproduced from
+        the session it was made in.
+        """
+        run = self.current(step)
+        if run is None:
+            return []
+        found = []
+        for handle in run.inputs.values():
+            root = self._root_of.get(handle)
+            if root is not None and root.name in self.gone:
+                found.append(root.name)
+        return sorted(set(found))
+
     def is_edited(self, step: str) -> bool:
         run = self.current(step)
         if run is None:
@@ -136,6 +162,33 @@ class Graph:
         for target in targets:
             visit(target)
         return order
+
+    def upstream(self, step: str) -> tuple[list[str], list[str]]:
+        """Everything a step comes from: its steps, and the roots under them.
+
+        Both oldest first, and neither includes the step itself. This is the
+        path a result took, which is what a reader asks for when they point
+        at one and want to know where it came from.
+        """
+        steps = [s for s in self.closure([step]) if s != step]
+        roots: list[str] = []
+        for name in [*steps, step]:
+            run = self.current(name)
+            if run is None:
+                continue
+            for handle in run.inputs.values():
+                root = self._root_of.get(handle)
+                if root is not None and root.name not in roots:
+                    roots.append(root.name)
+        return steps, roots
+
+    def downstream(self, step: str) -> list[str]:
+        """Every step that reads this one, directly or not."""
+        found: list[str] = []
+        for other in self.steps():
+            if other != step and step in self.closure([other])[:-1]:
+                found.append(other)
+        return found
 
     def leaves(self) -> list[str]:
         """Steps no current run consumes: the default targets."""
