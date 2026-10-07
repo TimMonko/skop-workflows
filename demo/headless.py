@@ -142,7 +142,17 @@ def main() -> int:
         'the abandoned branch is absent', 'smoothed_alt' not in recipe['steps']
     )
     check(
-        'the discarded sigmas are absent', json.dumps(recipe).count('@v') == 0
+        'the discarded sigmas are absent',
+        recipe['steps']['smoothed']['params'] == {'sigma': 2.0},
+    )
+    every_handle = [
+        handle
+        for run in recorder.graph().runs
+        for handle in (*run.inputs.values(), *run.outputs.values())
+    ]
+    check(
+        'the recipe holds no handle',
+        not any(handle in json.dumps(recipe) for handle in every_handle),
     )
     check(
         'the root is named, with a shape hint',
@@ -158,15 +168,11 @@ def main() -> int:
     print('\n7b. the graph view')
     everything = to_mermaid(view(recorder.graph()))
     check('the whole session draws the branch', 'smoothed_alt' in everything)
-    drawn = to_mermaid(
-        view(recorder.graph(), store=recorder.store, targets=['labels'])
-    )
+    drawn = to_mermaid(view(recorder.graph(), targets=['labels']))
     check('the target view is the closure', 'smoothed_alt' not in drawn)
     check('the edit is drawn', ':::edited' in drawn)
     check('the root is drawn once', drawn.count('root image') == 1)
-    downstream = to_mermaid(
-        view(recorder.graph(), store=recorder.store, targets=['components'])
-    )
+    downstream = to_mermaid(view(recorder.graph(), targets=['components']))
     check('an affected step is drawn', ':::affected' in downstream)
 
     print('\n7c. leaves come from current runs only')
@@ -417,7 +423,7 @@ def main() -> int:
         )
         check(
             'the view draws it too',
-            'root image' in to_mermaid(view(chunk_graph, store=chunked.store)),
+            'root image' in to_mermaid(view(chunk_graph)),
         )
         commits = list(chunked.store.repo.ancestry(branch='main'))
         check(
@@ -573,7 +579,7 @@ def main() -> int:
         'a step off the path is not on it',
         not path.touches('side') and path.touches('root:image'),
     )
-    grid = layout(view(graph, store=tracing.store))
+    grid = layout(view(graph))
     cols = {n.key: n.col for n in grid.nodes}
     check(
         'the layout runs left to right, roots first',
@@ -593,7 +599,7 @@ def main() -> int:
     )
 
     tracing.root_gone('image')
-    after = view(tracing.graph(), store=tracing.store)
+    after = view(tracing.graph())
     badges = {n.step: n.badge for n in after.nodes}
     check(
         'a step whose input went away says so, and is not stale',
@@ -605,7 +611,7 @@ def main() -> int:
         badges['smoothed'] != MISSING and after.gone == ('image',),
     )
     tracing.root('image', blobs(seed=9))
-    back = view(tracing.graph(), store=tracing.store)
+    back = view(tracing.graph())
     badges = {n.step: n.badge for n in back.nodes}
     check(
         'declaring the name again brings it back, and moves it under its readers',

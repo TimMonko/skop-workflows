@@ -2,8 +2,8 @@
 
 One model, however it is shown: steps become nodes, the current run's inputs
 become edges, and every node carries its sibling runs and their metadata.
-Nothing here draws, and nothing here parses a handle: a root's name comes
-from the store's own description when a store is given.
+Nothing here draws, and nothing here parses a handle: every name comes from
+the log.
 """
 
 from __future__ import annotations
@@ -11,7 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from skop_core import Graph, Run, Store
+from skop_core import Graph, Run
 
 #: The badge a node wears when nothing is wrong.
 FRESH = 'fresh'
@@ -20,9 +20,14 @@ STALE = 'stale'
 AFFECTED = 'affected'
 EDITED = 'edited'
 FAILED = 'failed'
+#: The newest run was cancelled: what it handed back is kept, not used.
+CANCELLED = 'cancelled'
 #: A step whose input's layer has gone. It is not stale -- there is nothing
 #: newer to catch up with -- so it ranks below the badges that ask for action.
 MISSING = 'missing'
+#: A step whose hand edit was kept: its output is the user's pixels, and a
+#: recipe asks for them as a root. Nothing to do about it, so it ranks last.
+KEPT = 'kept'
 
 #: A quick visual signal per badge, for graph labels and panels.
 SIGNALS = {
@@ -31,7 +36,9 @@ SIGNALS = {
     AFFECTED: '⚠️ affected',
     EDITED: '✏️ edited',
     FAILED: '❌ failed',
+    CANCELLED: '⏹️ cancelled',
     MISSING: '🕳️ input gone',
+    KEPT: '📌 kept edit',
 }
 
 #: A fill and a stroke per badge, so every renderer agrees on what a badge
@@ -42,7 +49,9 @@ COLOURS = {
     AFFECTED: ('#f3e8fd', '#8430ce'),
     EDITED: ('#fce8e6', '#a50e0e'),
     FAILED: ('#f1f3f4', '#5f6368'),
+    CANCELLED: ('#f1f3f4', '#5f6368'),
     MISSING: ('#e3e8ef', '#475569'),
+    KEPT: ('#e0f2f1', '#00695c'),
 }
 
 #: A root is not a badge -- it never fails and never goes stale -- so it keeps
@@ -61,7 +70,7 @@ class Edge:
     target: str
     #: The store's handle for the data, for a host that wants to load it.
     handle: str | None = None
-    #: The root's name, when a store could describe the handle.
+    #: The root's name, when the data is a root.
     root: str | None = None
 
 
@@ -107,37 +116,25 @@ class GraphView:
     gone: tuple[str, ...] = ()
 
 
-def view(
-    graph: Graph,
-    store: Store | None = None,
-    targets: list[str] | None = None,
-) -> GraphView:
+def view(graph: Graph, targets: list[str] | None = None) -> GraphView:
     """The graph as renderer-ready data.
 
     With targets, only their closure is shown — the same rule export uses.
     """
     steps = graph.closure(list(targets)) if targets else graph.steps()
-    names: dict[str, str] = {}
-
-    def root_name(handle: str) -> str | None:
-        if store is None:
-            return None
-        if handle not in names:
-            names[handle] = store.describe(handle)['name']
-        return names[handle]
 
     def edges_of(run: Run) -> tuple[Edge, ...]:
         found = []
         for param, handle in run.inputs.items():
-            producer = graph.producer(handle)
-            source = producer.step if producer is not None else None
+            origin = graph.origin(handle)
+            root = graph.root_of(handle)
             found.append(
                 Edge(
                     param=param,
-                    source=source,
+                    source=origin[0] if origin is not None else None,
                     target=run.step,
                     handle=handle,
-                    root=None if source is not None else root_name(handle),
+                    root=root.name if root is not None else None,
                 )
             )
         return tuple(found)
@@ -148,7 +145,9 @@ def view(
         runs = graph.runs_of(step)
         current = graph.current(step)
         flags = []
-        if current is None or runs[-1].status != 'ok':
+        if runs[-1].status == 'cancelled':
+            flags.append(CANCELLED)
+        elif current is None or runs[-1].status != 'ok':
             flags.append(FAILED)
         if graph.is_edited(step):
             flags.append(EDITED)
@@ -159,6 +158,8 @@ def view(
         missing = graph.missing_inputs(step)
         if missing:
             flags.append(MISSING)
+        if graph.is_accepted(step):
+            flags.append(KEPT)
         nodes.append(
             Node(
                 step=step,

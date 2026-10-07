@@ -43,7 +43,7 @@ def _(Path):
 
     work = Path(tempfile.mkdtemp(prefix='skop-graph-'))
     recorder = build(work)
-    everything = view(recorder.graph(), store=recorder.store)
+    everything = view(recorder.graph())
     return (SIGNALS, everything, recorder, to_mermaid, view)
 
 
@@ -96,7 +96,6 @@ def _(everything, mo):
 def _(mo, recorder, targets, to_mermaid, view):
     picture = view(
         recorder.graph(),
-        store=recorder.store,
         targets=targets.value or None,
     )
     diagram = mo.mermaid(to_mermaid(picture))
