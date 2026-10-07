@@ -276,3 +276,7 @@ Promoted decisions move into [`adr/`](adr/); their numbers stay here.
     `Run.paths`, apart from `params`; a recipe asks for it as the root
     `step.param` with only the file's name as a hint, and a replay must be
     handed a path for it. The log keeps the full path, since it is local.
+61. **`scikit-ops/opspec` is the only opspec.** The standalone `../opspec`
+    checkout (True-North) is retired: nothing reads it, nothing is ported to
+    or from it, and its drift from scikit-ops' copy no longer matters.
+    (Settles the question decision 45 left open.)

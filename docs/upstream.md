@@ -44,7 +44,8 @@ and `C:\Users\Tim\napari`.
   `scikit-ops/opspec` and `skop` re-exports it. Earlier, it was dropped
   (decision 44): The specification is tracked in
   scikit-ops, where the ops are; the two copies had drifted, and the survivor
-  is scikit-ops' `_spec.py`. `../opspec` is not a dependency of anything here.
+  is scikit-ops' `_spec.py`. The standalone `../opspec` checkout is retired (decision 61):
+  `scikit-ops/opspec` is the only opspec.
 - Its `Runner` was an interface only (`run(fn, args, *, axes, plans, position,
   on_progress, on_start, **kwargs)`, plus `close()`), with a `Builder` for
   environments. scikit-ops' runner is the one that runs now.
