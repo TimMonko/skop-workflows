@@ -35,6 +35,7 @@ from .runner import (
     RecordingRunner,
     Runner,
     outputs_of,
+    revive,
 )
 from .store import SimpleStore, Store
 
@@ -70,6 +71,7 @@ __all__ = [
     'plan',
     'prepare',
     'replay',
+    'revive',
     'save',
     'to_json',
 ]

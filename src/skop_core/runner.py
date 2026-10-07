@@ -302,7 +302,7 @@ class Recorder:
         spec = OpSpec.from_op(fn)
         # A parameter may be an op itself -- a workflow's choice of kernel --
         # which is recorded as the op's ID and arrives here as one on a replay.
-        args = self._revive(spec, args)
+        args = revive(spec, args, self.registry)
         inputs = self._inputs(spec, args)
         buffers = _buffers(spec)
         paths = {
@@ -482,49 +482,6 @@ class Recorder:
             options.pop('on_start', None),
         ):
             yield
-
-    def _revive(self, spec: OpSpec, args: dict[str, Any]) -> dict[str, Any]:
-        """Turn the JSON a recipe holds back into what the op declared.
-
-        An enum member and a path are recorded as plain JSON; the type the op
-        declares is what they become again. An op ID becomes the op it names,
-        but only for a parameter that takes a function, and only when it was
-        handed a string: a recipe never holds a callable (decision 2), so
-        this is where one comes back. The parameter's own choices are asked
-        first, since they are the ops it was written to accept; the registry
-        is for an op outside them.
-        """
-        found = dict(args)
-        for param in spec.params:
-            value = found.get(param.name)
-            declared = _declared_class(param.type)
-            if declared is not None and value is not None:
-                if issubclass(declared, Enum) and not isinstance(
-                    value, declared
-                ):
-                    found[param.name] = declared(value)
-                    continue
-                if issubclass(declared, PurePath) and isinstance(value, str):
-                    found[param.name] = declared(value)
-                    continue
-            if type_spec(param.type).name == PATH and isinstance(value, str):
-                found[param.name] = Path(value)
-                continue
-            if not isinstance(value, str) or not _takes_function(param):
-                continue
-            options = getattr(param.choices, 'options', ())
-            named = {
-                OpSpec.from_op(candidate).name: candidate
-                for _, candidate in options
-                if is_op(candidate)
-            }
-            fn = named.get(value) or (self.registry or {}).get(value)
-            if fn is None:
-                raise KeyError(
-                    f'{param.name}={value!r} is not an op this run can find'
-                )
-            found[param.name] = fn
-        return found
 
     def sources(self, spec: OpSpec, args: dict[str, Any]) -> dict[str, str]:
         """Where each array argument comes from, as the graph names it.
@@ -773,6 +730,55 @@ def _recordable(value: Any) -> Any:
     if callable(value) and is_op(value):
         return OpSpec.from_op(value).name
     return to_json(value)
+
+
+def revive(
+    spec: OpSpec,
+    args: Mapping[str, Any],
+    registry: Mapping[str, Callable] | None = None,
+) -> dict[str, Any]:
+    """Turn the JSON a recipe holds back into what the op declared.
+
+    An enum member and a path are recorded as plain JSON; the type the op
+    declares is what they become again. An op ID becomes the op it names,
+    but only for a parameter that takes a function, and only when it was
+    handed a string: a recipe never holds a callable (decision 2), so
+    this is where one comes back. The parameter's own choices are asked
+    first, since they are the ops it was written to accept; the registry
+    is for an op outside them.
+
+    A host uses this too, to show a recipe's parameters as the op declares
+    them -- an enum member in a dropdown rather than its value.
+    """
+    found = dict(args)
+    for param in spec.params:
+        value = found.get(param.name)
+        declared = _declared_class(param.type)
+        if declared is not None and value is not None:
+            if issubclass(declared, Enum) and not isinstance(value, declared):
+                found[param.name] = declared(value)
+                continue
+            if issubclass(declared, PurePath) and isinstance(value, str):
+                found[param.name] = declared(value)
+                continue
+        if type_spec(param.type).name == PATH and isinstance(value, str):
+            found[param.name] = Path(value)
+            continue
+        if not isinstance(value, str) or not _takes_function(param):
+            continue
+        options = getattr(param.choices, 'options', ())
+        named = {
+            OpSpec.from_op(candidate).name: candidate
+            for _, candidate in options
+            if is_op(candidate)
+        }
+        fn = named.get(value) or (registry or {}).get(value)
+        if fn is None:
+            raise KeyError(
+                f'{param.name}={value!r} is not an op this run can find'
+            )
+        found[param.name] = fn
+    return found
 
 
 def _declared_class(annotation: Any) -> type | None:
