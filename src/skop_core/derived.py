@@ -81,6 +81,27 @@ class Graph:
         found = self._root_versions.get(name)
         return found[-1] if found else None
 
+    def source_of(self, handle: Handle) -> str | None:
+        """Where a handle came from: a root's name, or the step that made it.
+
+        A root's name carries the prefix ``root:``, so it can never be taken
+        for a step that happens to share it.
+        """
+        root = self._root_of.get(handle)
+        if root is not None:
+            return f'root:{root.name}'
+        producer = self._producer.get(handle)
+        return producer.step if producer is not None else None
+
+    def sources_of(self, run: Run) -> dict[str, str]:
+        """Where each input of a run came from, by parameter."""
+        found = {}
+        for param, handle in run.inputs.items():
+            source = self.source_of(handle)
+            if source is not None:
+                found[param] = source
+        return found
+
     def edge(self, run: Run, param: str) -> str | None:
         """The step a parameter comes from, or None if it is a root."""
         produced = self.producer(run.inputs[param])

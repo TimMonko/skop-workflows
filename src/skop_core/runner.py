@@ -19,6 +19,8 @@ import contextvars
 import typing
 import uuid
 from collections.abc import Callable, Mapping
+from enum import Enum
+from pathlib import PurePath
 from typing import Any, Protocol
 
 import numpy as np
@@ -304,6 +306,18 @@ class Recorder:
         found = dict(args)
         for param in spec.params:
             value = found.get(param.name)
+            declared = param.type if isinstance(param.type, type) else None
+            # An enum member and a path are recorded as plain JSON; the type
+            # the op declares is what they become again.
+            if declared is not None and value is not None:
+                if issubclass(declared, Enum) and not isinstance(
+                    value, declared
+                ):
+                    found[param.name] = declared(value)
+                    continue
+                if issubclass(declared, PurePath) and isinstance(value, str):
+                    found[param.name] = declared(value)
+                    continue
             if not isinstance(value, str) or not _takes_function(param):
                 continue
             options = getattr(param.choices, 'options', ())
@@ -318,6 +332,28 @@ class Recorder:
                     f'{param.name}={value!r} is not an op this run can find'
                 )
             found[param.name] = fn
+        return found
+
+    def sources(self, spec: OpSpec, args: dict[str, Any]) -> dict[str, str]:
+        """Where each array argument comes from, as the graph names it.
+
+        A root by its name, a step's output by the step's. An array the store
+        never issued has no source, and is left out. This is what tells a call
+        on the same data from a call on other data, before either is recorded.
+        """
+        graph = self.graph()
+        found = {}
+        for name in _array_params(spec):
+            value = args.get(name)
+            handle = (
+                self.store.handle_of(value)
+                if isinstance(value, np.ndarray)
+                else None
+            )
+            if handle is not None:
+                source = graph.source_of(handle)
+                if source is not None:
+                    found[name] = source
         return found
 
     def _inputs(self, spec: OpSpec, args: dict[str, Any]) -> dict[str, Handle]:
@@ -448,9 +484,7 @@ class RecordingRunner:
 
         spec = OpSpec.from_op(fn)
         enclosing = _enclosing.get()
-        step = self._step_for(spec, self.recorder.graph())
-        if enclosing is not None:
-            step = f'{enclosing[1]}.{step}'
+        step = self._step(spec, call, enclosing)
 
         if spec.is_workflow:
             # Install ourselves as the ambient runner, so the calls the
@@ -471,6 +505,38 @@ class RecordingRunner:
         if on_recorded is not None and enclosing is None:
             on_recorded(step)
         return result
+
+    def _step(
+        self,
+        spec: OpSpec,
+        args: dict[str, Any],
+        enclosing: tuple[str, str] | None,
+    ) -> str:
+        """The step a call fills: an earlier one on the same data, or a new one.
+
+        A step is an op applied to particular inputs. Calling it again on the
+        same inputs -- with other parameters, or after they moved -- is another
+        run of that step, which is what makes trying parameters a history
+        rather than a pile. Calling it on *other* inputs is other work, and
+        gets a step of its own: ``smooth``, then ``smooth_2``.
+
+        Inputs are compared by where they come from (a root's name, a step's
+        name), not by their pixels, so a root that moved is still the same
+        input and its reader goes stale rather than being forked.
+        """
+        graph = self.recorder.graph()
+        base = self._step_for(spec, graph)
+        if enclosing is not None:
+            base = f'{enclosing[1]}.{base}'
+        wanted = self.recorder.sources(spec, args)
+        name, count = base, 1
+        while name in graph.by_step:
+            last = graph.runs_of(name)[-1]
+            if last.op == spec.name and graph.sources_of(last) == wanted:
+                return name
+            count += 1
+            name = f'{base}_{count}'
+        return name
 
 
 def _takes_function(param: Any) -> bool:

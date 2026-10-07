@@ -8,6 +8,8 @@ from the op contract, which is scikit-ops'.
 
 from __future__ import annotations
 
+import os
+from enum import Enum
 from typing import Any
 
 
@@ -15,10 +17,16 @@ def to_json(value: Any) -> Any:
     """The value as it will be recorded.
 
     Containers are rebuilt, and a stand-in scalar -- a numpy scalar, say -- is
-    unwrapped through its own ``item()``. Everything else passes through for
+    unwrapped through its own ``item()``. An enum member is recorded as its
+    value and a path as its string: the op's declared type is what turns them
+    back (``Recorder._revive``). Everything else passes through for
     :func:`is_json` to judge. This module stays free of numpy, because the
     contract it belongs to is.
     """
+    if isinstance(value, Enum):
+        return to_json(value.value)
+    if isinstance(value, os.PathLike):
+        return os.fspath(value)
     if isinstance(value, (bool, int, float, str)) or value is None:
         return value
     if isinstance(value, (list, tuple)):

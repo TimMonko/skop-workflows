@@ -21,8 +21,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import skop  # noqa: E402
 from demo_ops import (  # noqa: E402
+    Direction,
     blur_then_threshold,
     connect,
+    flip,
     gaussian,
     otsu,
     percentile,
@@ -608,6 +610,57 @@ def main() -> int:
     check(
         'declaring the name again brings it back, and moves it under its readers',
         not back.gone and badges['normalized'] == STALE,
+    )
+
+    print('\n14. an enum parameter, and what makes a step a step')
+    steps_session = session(work, 'steps')
+    first = blobs(seed=31)
+    second = blobs(seed=32)
+    steps_session.root('first', first)
+    steps_session.root('second', second)
+    lister = RecordingRunner(steps_session)
+    lister.run(flip, {'image': first, 'direction': Direction.cols})
+    graph = steps_session.graph()
+    check(
+        'an enum is recorded as its value',
+        graph.current('flip').params == {'direction': 'cols'},
+    )
+    steps_session.rerun(flip, 'flip')
+    rerun = steps_session.graph().current('flip')
+    check(
+        'and is an enum again when the step runs again',
+        np.array_equal(
+            steps_session.store.get(rerun.outputs['result']), np.flip(first, 1)
+        ),
+    )
+    lister.run(flip, {'image': first, 'direction': Direction.rows})
+    check(
+        'other parameters on the same input are another run of the step',
+        steps_session.graph().steps() == ['flip']
+        and len(steps_session.graph().runs_of('flip')) == 3,
+    )
+    lister.run(flip, {'image': second})
+    check(
+        'the same op on another input is a step of its own',
+        steps_session.graph().steps() == ['flip', 'flip_2'],
+    )
+    lister.run(flip, {'image': second, 'direction': Direction.cols})
+    check(
+        'and goes on being that step',
+        len(steps_session.graph().runs_of('flip_2')) == 2,
+    )
+    steps_session.root('first', blobs(seed=33))
+    lister.run(
+        flip,
+        {
+            'image': steps_session.store.get(
+                steps_session.graph().current_root('first').handle
+            )
+        },
+    )
+    check(
+        'an input that moved is still the same input',
+        steps_session.graph().steps() == ['flip', 'flip_2'],
     )
 
     print(f'\nstore layout, under {work}')

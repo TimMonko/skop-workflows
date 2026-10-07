@@ -211,3 +211,11 @@ Promoted decisions move into [`adr/`](adr/); their numbers stay here.
     another layer for an input stores that layer's pixels under the same name,
     so the steps that read it are stale and Produce brings them up to date on
     the new one. A root keeps its name when its layer is renamed.
+50. **A step is an op applied to particular inputs.** `RecordingRunner` reuses
+    a step only when the call reads the same sources (a root's name, a step's
+    name) as the step's last run; the same op on other inputs is a new step,
+    `smooth_2`. Other parameters on the same inputs are another run. A root
+    that moved is still the same source. (Refines 23 and 33.)
+51. **Enums and paths are recorded as JSON and revived by declared type.** An
+    enum member is written as its value and a path as its string;
+    `Recorder.run` turns them back from the parameter's declared type.

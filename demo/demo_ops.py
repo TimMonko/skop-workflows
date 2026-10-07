@@ -13,6 +13,7 @@ workflow looks like to the recorder; nothing here builds that environment.
 from __future__ import annotations
 
 from collections.abc import Callable
+from enum import Enum
 from typing import Annotated
 
 import numpy as np
@@ -120,6 +121,21 @@ def blur_then_threshold(
 ) -> LabelsOf[np.ndarray]:
     """A workflow that is handed an op: which blur to use is a parameter."""
     return skop.run(otsu, {'image': skop.run(blur, {'image': image})})
+
+
+class Direction(Enum):
+    """Which way to flip: an enum, which is not JSON until it is recorded."""
+
+    rows = 'rows'
+    cols = 'cols'
+
+
+@op()
+def flip(
+    image: ImageOf[np.ndarray], direction: Direction = Direction.rows
+) -> ImageOf[np.ndarray]:
+    """Mirror the image top to bottom, or left to right."""
+    return np.flip(image, 0 if direction is Direction.rows else 1)
 
 
 @op(env='demo')
