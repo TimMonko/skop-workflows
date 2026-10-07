@@ -2,7 +2,16 @@
 
 from .derived import Graph
 from .params import is_json, to_json
-from .recipe import batch, export, plan, replay
+from .recipe import (
+    MissingOp,
+    UnboundRoot,
+    batch,
+    export,
+    load,
+    plan,
+    replay,
+    save,
+)
 from .record import (
     ACCEPTED,
     DETACHED,
@@ -11,6 +20,7 @@ from .record import (
     Detached,
     Event,
     Handle,
+    Record,
     Root,
     Run,
 )
@@ -20,6 +30,7 @@ from .runner import (
     Recorder,
     RecordingRunner,
     Runner,
+    outputs_of,
 )
 from .store import SimpleStore, Store
 
@@ -33,7 +44,9 @@ __all__ = [
     'Graph',
     'Handle',
     'InProcess',
+    'MissingOp',
     'MissingRoot',
+    'Record',
     'Recorder',
     'RecordingRunner',
     'Root',
@@ -41,10 +54,14 @@ __all__ = [
     'Runner',
     'SimpleStore',
     'Store',
+    'UnboundRoot',
     'batch',
     'export',
     'is_json',
+    'load',
+    'outputs_of',
     'plan',
     'replay',
+    'save',
     'to_json',
 ]

@@ -2,17 +2,37 @@
 
 Nothing here is stored: which run is current, whether a step is stale, whether
 it was edited, and what a set of targets needs are all read off the log.
+
+One question underlies most of the others: *where is the data a handle stood
+for now?* (:meth:`Graph.now`). A root's data is wherever its newest version
+is; a step's output is in the step's current run, or in the pixels a user
+kept in its place. A run whose inputs are not where they are now is stale,
+and bringing it up to date means reading them from there.
 """
 
 from __future__ import annotations
 
-from .record import EDITED, Detached, Event, Handle, Root, Run
+from .record import (
+    ACCEPTED,
+    EDITED,
+    OK,
+    Detached,
+    Event,
+    Handle,
+    Record,
+    Root,
+    Run,
+)
 
 
 class Graph:
-    """The steps a log describes, and the questions a host asks about them."""
+    """The steps a log describes, and the questions a host asks about them.
 
-    def __init__(self, records: list[Run | Root | Detached | Event]) -> None:
+    A snapshot: built from the records it is given, and not updated after.
+    Ask the recorder for a new one once the log has grown.
+    """
+
+    def __init__(self, records: list[Record]) -> None:
         self.runs = [r for r in records if isinstance(r, Run)]
         self.roots = [r for r in records if isinstance(r, Root)]
         self.events = [e for e in records if isinstance(e, Event)]
@@ -27,10 +47,14 @@ class Graph:
         self.by_step: dict[str, list[Run]] = {}
         for run in self.runs:
             self.by_step.setdefault(run.step, []).append(run)
-        self._producer: dict[Handle, Run] = {}
+        self._current: dict[str, Run | None] = {}
+        for step, runs in self.by_step.items():
+            succeeded = [r for r in runs if r.status == OK]
+            self._current[step] = succeeded[-1] if succeeded else None
+        self._producer: dict[Handle, tuple[Run, str]] = {}
         for run in self.runs:
-            for handle in run.outputs.values():
-                self._producer[handle] = run
+            for output, handle in run.outputs.items():
+                self._producer[handle] = (run, output)
         #: Every version of a root, oldest first, by name.
         self._root_versions: dict[str, list[Root]] = {}
         #: Which root a handle was recorded as, so no handle needs parsing.
@@ -38,6 +62,38 @@ class Graph:
         for root in self.roots:
             self._root_versions.setdefault(root.name, []).append(root)
             self._root_of[root.handle] = root
+        #: The marks on each run, in log order.
+        self._marks: dict[str, list[Event]] = {}
+        for event in self.events:
+            self._marks.setdefault(event.run, []).append(event)
+        #: Pixels kept in place of a step's output: (step, output) -> handle,
+        #: while the current run's latest mark is a keep. Keeps in a row add
+        #: up, one output each, so a step with several outputs can keep each.
+        self._kept: dict[tuple[str, str], Handle] = {}
+        #: Every set of pixels ever kept, by the (step, output) it stood in
+        #: for -- kept now or not -- so a run that read them knows where its
+        #: data went after a revert or a new run.
+        self._kept_as: dict[Handle, tuple[str, str]] = {}
+        runs_by_id = {run.id: run for run in self.runs}
+        for event in self.events:
+            run = runs_by_id.get(event.run)
+            if event.kind == ACCEPTED and event.handle and run is not None:
+                self._kept_as[event.handle] = (
+                    run.step,
+                    _output_of(event, run),
+                )
+        for step, run in self._current.items():
+            marks = [] if run is None else self._marks.get(run.id, [])
+            if run is None or not marks or marks[-1].kind != ACCEPTED:
+                continue
+            replaced: dict[str, Handle] = {}
+            for mark in reversed(marks):
+                if mark.kind != ACCEPTED:
+                    break
+                if mark.handle is not None:
+                    replaced.setdefault(_output_of(mark, run), mark.handle)
+            for output, handle in run.outputs.items():
+                self._kept[(step, output)] = replaced.get(output, handle)
 
     # -- steps -----------------------------------------------------------
 
@@ -62,12 +118,12 @@ class Graph:
 
     def current(self, step: str) -> Run | None:
         """The newest successful run; a failed run never becomes current."""
-        succeeded = [r for r in self.runs_of(step) if r.status == 'ok']
-        return succeeded[-1] if succeeded else None
+        return self._current.get(step)
 
     def producer(self, handle: Handle) -> Run | None:
         """The run that produced a handle, or None if it is a root."""
-        return self._producer.get(handle)
+        found = self._producer.get(handle)
+        return found[0] if found is not None else None
 
     def root_of(self, handle: Handle) -> Root | None:
         """The root a handle was recorded as, or None if a step made it."""
@@ -81,6 +137,42 @@ class Graph:
         found = self._root_versions.get(name)
         return found[-1] if found else None
 
+    def origin(self, handle: Handle) -> tuple[str, str] | None:
+        """The (step, output) a handle is the data of, or None for a root.
+
+        Kept pixels are the data of the step they were kept in place of.
+        """
+        if handle in self._kept_as:
+            return self._kept_as[handle]
+        found = self._producer.get(handle)
+        if found is None:
+            return None
+        run, output = found
+        return run.step, output
+
+    def now(self, handle: Handle) -> Handle | None:
+        """Where the data a handle stood for is now.
+
+        A root's newest version; a step output's current run, or the pixels
+        kept in its place. The handle itself when nothing has moved, and None
+        when the step no longer makes that output at all.
+        """
+        root = self._root_of.get(handle)
+        if root is not None:
+            newest = self.current_root(root.name)
+            return newest.handle if newest is not None else handle
+        origin = self.origin(handle)
+        if origin is None:
+            return handle
+        return self.latest(*origin)
+
+    def latest(self, step: str, output: str) -> Handle | None:
+        """The handle a step's output is now: kept pixels, else the run's."""
+        if (step, output) in self._kept:
+            return self._kept[(step, output)]
+        run = self.current(step)
+        return None if run is None else run.outputs.get(output)
+
     def source_of(self, handle: Handle) -> str | None:
         """Where a handle came from: a root's name, or the step that made it.
 
@@ -90,8 +182,8 @@ class Graph:
         root = self._root_of.get(handle)
         if root is not None:
             return f'root:{root.name}'
-        producer = self._producer.get(handle)
-        return producer.step if producer is not None else None
+        origin = self.origin(handle)
+        return origin[0] if origin is not None else None
 
     def sources_of(self, run: Run) -> dict[str, str]:
         """Where each input of a run came from, by parameter."""
@@ -102,29 +194,27 @@ class Graph:
                 found[param] = source
         return found
 
-    def edge(self, run: Run, param: str) -> str | None:
-        """The step a parameter comes from, or None if it is a root."""
-        produced = self.producer(run.inputs[param])
-        return produced.step if produced else None
+    def _upstream_steps(self, run: Run) -> list[str]:
+        """The steps whose outputs a run read, in parameter order."""
+        found = []
+        for handle in run.inputs.values():
+            origin = self.origin(handle)
+            if origin is not None and origin[0] not in found:
+                found.append(origin[0])
+        return found
 
     # -- derived flags ---------------------------------------------------
 
     def is_stale(self, step: str) -> bool:
+        """Whether an input the current run read has moved on since.
+
+        A step whose edit was kept is not stale: its output is the user's
+        pixels now, and there is nothing to catch up with.
+        """
         run = self.current(step)
-        if run is None:
+        if run is None or self.is_accepted(step):
             return False
-        for handle in run.inputs.values():
-            upstream = self.producer(handle)
-            if upstream is not None:
-                if self.current(upstream.step) is not upstream:
-                    return True
-                continue
-            # A root has no producer, but it can still move: a newer version
-            # stored under the same name supersedes the one read here.
-            root = self._root_of.get(handle)
-            if root is not None and self.current_root(root.name) is not root:
-                return True
-        return False
+        return any(self.now(h) != h for h in run.inputs.values())
 
     def missing_inputs(self, step: str) -> list[str]:
         """The roots the step read whose layer has since gone.
@@ -145,11 +235,26 @@ class Graph:
         return sorted(set(found))
 
     def is_edited(self, step: str) -> bool:
+        """Whether the current run's output was changed by hand, unresolved."""
+        mark = self._last_mark(self.current(step))
+        return mark is not None and mark.kind == EDITED
+
+    def is_accepted(self, step: str) -> bool:
+        """Whether a hand edit to the current run's output was kept."""
+        mark = self._last_mark(self.current(step))
+        return mark is not None and mark.kind == ACCEPTED
+
+    def accepted(self, step: str, output: str | None = None) -> Handle | None:
+        """Where a step's kept pixels are, or None when nothing was kept.
+
+        ``output`` may be left out for a step with one output.
+        """
+        if not self.is_accepted(step):
+            return None
         run = self.current(step)
-        if run is None:
-            return False
-        marks = [e for e in self.events if e.run == run.id]
-        return bool(marks) and marks[-1].kind == EDITED
+        assert run is not None
+        name = output if output is not None else _only(run)
+        return self._kept.get((step, name))
 
     def is_affected(self, step: str) -> bool:
         """Whether an edited step feeds this one, directly or not."""
@@ -158,10 +263,20 @@ class Graph:
             for other in self.closure([step])[:-1]
         )
 
+    def _last_mark(self, run: Run | None) -> Event | None:
+        if run is None:
+            return None
+        marks = self._marks.get(run.id)
+        return marks[-1] if marks else None
+
     # -- selection -------------------------------------------------------
 
     def closure(self, targets: list[str]) -> list[str]:
-        """The steps producing the targets, oldest first, and nothing else."""
+        """The steps producing the targets, oldest first, and nothing else.
+
+        A step whose edit was kept is where a closure stops: its output is
+        no longer made from its inputs, so nothing upstream of it is needed.
+        """
         order: list[str] = []
         seen: set[str] = set()
 
@@ -174,10 +289,9 @@ class Graph:
                 # A step whose every run failed produces nothing, so nothing
                 # downstream can be built from it either.
                 return
-            for handle in run.inputs.values():
-                upstream = self.producer(handle)
-                if upstream is not None:
-                    visit(upstream.step)
+            if not self.is_accepted(step):
+                for upstream in self._upstream_steps(run):
+                    visit(upstream)
             order.append(step)
 
         for target in targets:
@@ -195,7 +309,7 @@ class Graph:
         roots: list[str] = []
         for name in [*steps, step]:
             run = self.current(name)
-            if run is None:
+            if run is None or (name != step and self.is_accepted(name)):
                 continue
             for handle in run.inputs.values():
                 root = self._root_of.get(handle)
@@ -213,15 +327,25 @@ class Graph:
 
     def leaves(self) -> list[str]:
         """Steps no current run consumes: the default targets."""
-        consumed = set()
+        consumed: set[str] = set()
         for step in self.steps():
             run = self.current(step)
-            if run is None:
-                continue
-            for handle in run.inputs.values():
-                upstream = self.producer(handle)
-                if upstream is not None:
-                    consumed.add(upstream.step)
+            if run is not None:
+                consumed.update(self._upstream_steps(run))
         return [
             s for s in self.steps() if s not in consumed and self.current(s)
         ]
+
+
+def _only(run: Run) -> str:
+    """A run's one output, or a refusal naming the choice it needs."""
+    if len(run.outputs) != 1:
+        raise ValueError(
+            f'{run.step!r} has outputs {sorted(run.outputs)}; say which'
+        )
+    return next(iter(run.outputs))
+
+
+def _output_of(mark: Event, run: Run) -> str:
+    """Which output a keep replaced: its own note of it, else the only one."""
+    return mark.output if mark.output is not None else _only(run)
