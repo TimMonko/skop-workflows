@@ -27,8 +27,11 @@ replayed — first on one image, then over a folder.
 
 ## What runs today
 
-`demo/headless.py` asserts the headless parts, against three numpy-only ops
-that stand in for the scikit-ops ones (41 checks; exits non-zero on failure):
+`demo/headless.py` asserts the headless parts, against numpy-only ops that
+stand in for the scikit-ops ones (89 checks; exits non-zero on failure). The
+edge cases the ten steps do not reach -- names no filesystem takes, several
+outputs, output buffers, cancelled runs, kept edits, threads, every store
+backend -- are in the pytest suite under `tests/` (`uv run pytest`).
 
 - a root declared rather than assumed, and an undeclared array refused with a
   clear message

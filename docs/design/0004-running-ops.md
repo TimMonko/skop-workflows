@@ -3,7 +3,8 @@
 Status: built for the napari host. The dock does not run ops: the Ops and
 Workflows panels do, through a session's `RecordingRunner` (skop-napari
 `_session.py`), over scikit-ops' own `Runner`, so environments, progress and
-Cancel work as they always did. Not built: `cancelled` runs, durations.
+Cancel work as they always did. `cancelled` runs and durations are recorded
+(decision 56).
 
 ## Off the GUI thread
 
@@ -27,8 +28,9 @@ scikit-ops' `Runner.run` already takes `on_progress` and `on_start`, relays
 sub-op progress and hands back a task for cancelling (see
 [upstream.md](../upstream.md)). The recorder forwards both: the dock turns
 events into a row's progress and uses the task to cancel. A cancelled run
-should leave a record with `status='cancelled'`, which the recorder does not
-write yet — today only failures are recorded.
+leaves a record with `status='cancelled'` (decision 56): the recorder watches
+the cancel handle as it passes, because an op that honours a cancel simply
+returns early and the task says nothing afterwards.
 
 ## One inner runner, many recorders
 

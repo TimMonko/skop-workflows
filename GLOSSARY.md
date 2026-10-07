@@ -9,7 +9,7 @@ A function declared as capturable, callable identically from a script or from a 
 _Avoid_: Action, step, task, node (when meaning the function itself)
 
 **Run**:
-One invocation of an op, with the data it consumed, its parameters, and the data it produced. A run of a workflow op contains the runs of the ops it called.
+One invocation of an op, with the data it consumed, its parameters, the data it produced, and how the runner was asked to run it. A run of a workflow op contains the runs of the ops it called. A run is ok, failed or cancelled; only an ok run can be a step's current run.
 _Avoid_: Call, execution, record (record is the stored form of a run)
 
 **Data handle**:
@@ -40,6 +40,10 @@ _Avoid_: Dirty, outdated
 **Edited**:
 A step whose output data was changed by hand after its run, so a replay would not reproduce it. Changing a step's parameters or op is a new run, not an edit. A warning, not a block: unedited data may still flow through it.
 _Avoid_: Detached, modified, tainted
+
+**Kept**:
+An edited step whose hand-made pixels the user chose to keep. They are stored and stand for the step's output from then on: what read the old output is stale, nothing reruns the step over them, and a recipe asks for them as a root named after the step. Running the step again, or reverting, lets them go.
+_Avoid_: Accepted (fine in code: `accept_edit`), committed, frozen
 
 **Affected**:
 A step that consumed, directly or indirectly, the output of an edited step, so a replay would not reproduce it either.

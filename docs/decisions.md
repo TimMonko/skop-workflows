@@ -46,7 +46,8 @@ Promoted decisions move into [`adr/`](adr/); their numbers stay here.
     protocol.
 11. **Workflow ops are recorded as parent plus leaf runs.** The recipe expands
     a workflow into its leaf steps; the parent is a grouping for the graph
-    view. (For the nested-call mechanics, see 16.)
+    view. (For the nested-call mechanics, see 16. The recipe half is
+    superseded by 53: a workflow is exported as one step.)
 12. **No upstream op version yet.** Each run records the providing package's
     version (and git commit for a checkout) plus a digest of the environment
     lock.
@@ -64,7 +65,8 @@ Promoted decisions move into [`adr/`](adr/); their numbers stay here.
     in the scikit-ops working tree (not yet committed there), and used by
     `RecordingRunner`, which is how a panel, a script or a workflow is
     recorded by being pointed at it: the recorder stands where the runner
-    stands, and never launches an op itself.
+    stands, and never launches an op itself. (The patch is committed in
+    scikit-ops; refined by 54.)
 17. **The demo contract in [demo.md](demo.md) is the definition of done**,
     including the host-side workflow op (step 8) and the headless replay and
     batch (step 10).
@@ -118,7 +120,7 @@ Promoted decisions move into [`adr/`](adr/); their numbers stay here.
     puts them under the step name; the step then has no producing op in a
     recipe, and its consumers list it as a root to supply at replay. Not
     built yet: it waits for the napari host that can pass the painted array;
-    until then `accept_edit` only clears the edited mark.
+    until then `accept_edit` only clears the edited mark. (Built: see 57.)
 35. **The napari host keeps its bookkeeping in a module that imports no
     napari, behind a two-method protocol.** A host owns a recorder and a
     *display*; a display lists its layers and shows one. The napari adapter is
@@ -219,3 +221,58 @@ Promoted decisions move into [`adr/`](adr/); their numbers stay here.
 51. **Enums and paths are recorded as JSON and revived by declared type.** An
     enum member is written as its value and a path as its string;
     `Recorder.run` turns them back from the parameter's declared type.
+52. **A recipe says where each input comes from** (format 2). An input is
+    `{'root': name}` or `{'step': name, 'output': name}`, never a bare
+    `@name`: a root and a step may share a name (a layer called `smoothed`
+    beside the step that made it), and a step may have several outputs, so
+    neither may be left to a reader to guess. A recipe of another format is
+    refused on load; there is no reader for format 1. (Refines 18 and 30.)
+53. **A workflow is exported and replayed as one step, never expanded into
+    its leaves.** A workflow may do work on the host between its calls that
+    no leaf run records, so replaying its leaves would not reproduce it. Its
+    nested runs stay detail in the graph. A step outside the workflow that
+    read a nested output exports that nested run as a step of its own, since
+    it is a run like any other. (Supersedes the recipe half of 11.)
+54. **A recorder routes a workflow's calls back through itself, whoever
+    started it.** `Recorder.run` makes a `RecordingRunner` ambient while a
+    workflow runs, so replay, update, rerun and produce record nested calls
+    and run them on the recorder's inner runner -- never on scikit-ops'
+    default runner, which nobody configured. Naming nested steps
+    (`step_for`) belongs to the recorder. scikit-ops' `_run_here` reuses the
+    installed ambient's task, so a workflow's own `progress()` and
+    `cancel_requested()` reach the handle the caller holds. (Refines 16; the
+    `ambient` patch is committed in scikit-ops, the task reuse is not yet.)
+55. **A run records the runner options that say how it ran.** `variant`,
+    `axes`, `plans` and `position` go into `Run.options` as JSON, and
+    update, rerun, produce and replay pass them back, so a step a panel ran
+    plane by plane is run plane by plane again. `InProcess` honours plans
+    the way scikit-ops' worker does. Progress and cancel handles are not
+    recorded: they say who to tell, not how to run.
+56. **A cancelled run is recorded as `cancelled`, and never becomes
+    current.** An op that sees a cancel returns what it has so far, which
+    looks exactly like a result. The recorder watches the cancel handle on
+    its way to the caller, keeps what came back for inspection, and leaves
+    the step on its last finished run. Every run also records when it
+    started and how long it took (decision 8's measurement).
+57. **Keeping an edit is built** (decision 34). `accept_edit(step, pixels)`
+    stores the pixels; from then on they are the step's output. What read
+    the old output is stale; a closure stops at the kept step; Produce never
+    runs it again; a recipe asks for the pixels as a root named after the
+    step (`step.output` for one of several outputs). Running the step again,
+    or reverting, lets the kept pixels go, and whatever read them is stale.
+    Underneath is one question, `Graph.now(handle)`: where the data a handle
+    stood for is now. A run is stale when an input is not where it is now.
+58. **A store takes any name, and refuses what it cannot write portably.**
+    A step's or layer's name is encoded into one path segment that every
+    filesystem keeps apart (`ch1: DAPI`, `a/b`, `Image` beside `image`,
+    `con`); the handle keeps the name as given. A value numpy can only hold
+    as Python objects is refused rather than pickled, and a scalar output is
+    stored as a 0-d array. Both stores are safe to use from two threads.
+59. **The core has a pytest suite beside the demo.** `demo/headless.py`
+    stays the contract for the ten steps; `tests/` holds the edge cases, and
+    runs each against every `Store` backend installed. (Amends 17.)
+60. **A file parameter is a root of its own, never a recipe value** (decision
+    6, built). A parameter whose wire type is `path` is recorded in
+    `Run.paths`, apart from `params`; a recipe asks for it as the root
+    `step.param` with only the file's name as a hint, and a replay must be
+    handed a path for it. The log keeps the full path, since it is local.

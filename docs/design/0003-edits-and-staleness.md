@@ -1,6 +1,7 @@
 # Design note 0003: hand edits and staleness
 
-Status: proposed, not built.
+Status: built. The bracket and the marks are in skop-napari `_host.py`;
+keeping an edit is decision 57, and the graph side of it is `Graph.now`.
 
 ## The bracket
 

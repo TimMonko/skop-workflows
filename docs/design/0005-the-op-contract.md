@@ -1,8 +1,11 @@
 # Design note 0005: one op contract, and where it lives
 
-Status: settled. scikit-ops is the op contract (decision 44). opspec was a
-prototype carrying a second copy of the same module; it is dropped, and this
-note records what that costs and where the two had drifted.
+Status: settled, then refined. scikit-ops is the op contract (decision 44),
+and since decision 45 its spec layer is opspec again, kept inside scikit-ops
+as a workspace package and re-exported by `skop`; this repo still imports
+only `skop`, and reads a spec with `OpSpec.from_op(fn)` (not `skop.spec`).
+What follows is the note as written for decision 44, kept for its account of
+where the two copies had drifted.
 
 ## What we use
 

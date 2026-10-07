@@ -71,12 +71,23 @@ and `C:\Users\Tim\napari`.
   service per `(env, variant, exclusive)`, and ops sharing an environment
   share a worker. `Runner.release()` returns cached GPU memory; `close=True`
   shuts a worker down. Appose provides the worker primitive underneath.
-- The ambient mechanism: `_run_here` does `_current.set(_Ambient(self,
-  task))` — unconditionally — and the module-level `skop.run()` dispatches
-  through `_current.get()`. **A wrapper runner is therefore bypassed for
-  nested calls** until decision 16's patch lands. The patch is written
-  (`skop.ambient`, and `_run_here` leaving an installed ambient alone) but
-  uncommitted in the scikit-ops checkout.
+- The ambient mechanism (checked 2026-10-07, branch `skop-workflows` of the
+  scikit-ops checkout): `skop.ambient(runner, on_progress, on_start)`
+  installs a runner for nested calls, and `_run_here` leaves an installed
+  ambient alone, so the outermost installer wins (commit `9f83fe5`). The
+  module-level `skop.run()` dispatches through it. **Uncommitted on top:**
+  `_run_here` also reuses the installed ambient's task instead of making
+  one nobody holds, so a workflow's own `progress()` and
+  `cancel_requested()` reach the caller (decision 54; tested in
+  `tests/test_nested_calls.py`).
+- A cooperative cancel leaves no trace on the task: an op that sees
+  `cancel_requested()` returns early, and Appose reports the task COMPLETE.
+  Only a cancel that ends in an exception (an iterated plan, for one) is
+  visible as such. Hence the recorder's watch on the handle (decision 56).
+- `Runner.run` returns a NamedTuple only when the op's return type is one
+  with those fields; `tuple[...]` comes back as a plain tuple, and a
+  computer-form op returns its caller's buffer. `skop_core.outputs_of`
+  labels all three.
 - Plain arrays are copied to shared memory by `_codec` (two copies at peak).
   `lazy-array.md` is a proposal; nothing is built.
 - Workflow docs list "saving a configured workflow as a re-runnable recipe"
