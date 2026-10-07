@@ -14,16 +14,16 @@ from __future__ import annotations
 
 import json
 import os
-from collections.abc import Callable, Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path, PurePath
 from typing import Any
 
 import numpy as np
-from skop import OpSpec, Role
+from skop import AdaptationPlan, OpSpec, Role
 
 from .derived import Graph
-from .runner import Recorder, _revived_options, outputs_of
+from .runner import Recorder, _changes_nothing, _revived_options, outputs_of
 from .store import Store
 
 FORMAT = 2
@@ -194,10 +194,20 @@ class RootNeed:
     kept_for: str | None
     #: The recipe's steps that read it, in order.
     read_by: tuple[str, ...]
+    #: Whether every op that reads it declares the axes it consumes, so data
+    #: with more axes than were recorded can be planned onto it -- a stack
+    #: run plane by plane where one plane was recorded.
+    plannable: bool = False
 
     @property
     def is_path(self) -> bool:
         return self.path_hint is not None
+
+    def fits(self, ndim: int) -> bool:
+        """Whether data with this many axes can stand for this input."""
+        if self.ndim is None:
+            return True
+        return ndim == self.ndim or (self.plannable and ndim > self.ndim)
 
 
 @dataclass
@@ -211,6 +221,9 @@ class Replayed:
     steps: dict[str, str] = field(default_factory=dict)
     #: Whether a cancel stopped it before every step ran.
     cancelled: bool = False
+    #: Recipe step -> parameter -> how the bound data was planned onto the
+    #: op, for a step whose recorded plan did not fit (or had none).
+    planned: dict[str, dict[str, str]] = field(default_factory=dict)
 
 
 class Prepared:
@@ -261,15 +274,18 @@ class Prepared:
             )
         )
         roles: set[Role | None] = set()
+        plannable = bool(read_by)
         for step in read_by:
             entry = self.recipe['steps'][step]
             fn = self.registry.get(entry['op'])
             if fn is None:
+                plannable = False
                 continue
             by_name = {p.name: p for p in OpSpec.from_op(fn).params}
             for param, ref in entry['inputs'].items():
                 if ref.get('root') == name and param in by_name:
                     roles.add(by_name[param].role)
+                    plannable = plannable and by_name[param].axes is not None
         kept = self.recipe.get('caution', {}).get('kept', [])
         kept_for = next(
             (s for s in kept if name == s or name.startswith(f'{s}.')), None
@@ -282,6 +298,7 @@ class Prepared:
             path_hint=hint.get('path'),
             kept_for=kept_for,
             read_by=read_by,
+            plannable=plannable and hint.get('ndim') is not None,
         )
 
     def check(self, roots: Mapping[str, Any]) -> None:
@@ -304,9 +321,10 @@ class Prepared:
             ndim = getattr(value, 'ndim', None)
             if ndim is None:
                 ndim = np.ndim(value)
-            if need.ndim is not None and ndim != need.ndim:
+            if not need.fits(ndim):
+                more = ' or more' if need.plannable else ''
                 raise UnboundRoot(
-                    f'{need.name!r} wants {need.ndim} axes, got {ndim}'
+                    f'{need.name!r} wants {need.ndim}{more} axes, got {ndim}'
                 )
 
     def run(
@@ -319,6 +337,7 @@ class Prepared:
         on_step: Callable[[int, int, str, str], None] | None = None,
         on_done: Callable[[str, str], None] | None = None,
         cancelled: Callable[[], bool] | None = None,
+        axes: Mapping[str, Sequence[str | None]] | None = None,
         **options: Any,
     ) -> Replayed:
         """Run the closure of the targets, recording each step.
@@ -345,6 +364,12 @@ class Prepared:
             runs, and ``(recipe step, session step)`` once it is recorded.
         cancelled
             Asked before each step; a true answer stops the replay there.
+        axes
+            What each root's axes are called, when the host knows (a layer's
+            axis labels). A recorded axis plan is reused when it fits the
+            data a step is handed; when it does not -- a stack bound where a
+            plane was recorded -- the data is planned afresh with these
+            names, and what came of it is reported in ``Replayed.planned``.
         options
             For the runner, on every step: ``on_progress``, ``on_start``.
         """
@@ -366,6 +391,12 @@ class Prepared:
 
         done = Replayed()
         outputs: dict[str, dict[str, Any]] = {}
+        #: What each value's axes are called, by identity, where known.
+        named: dict[int, tuple[str | None, ...]] = {
+            id(bound[name]): tuple(labels)
+            for name, labels in (axes or {}).items()
+            if name in bound
+        }
         total = len(self.steps)
         for index, step in enumerate(self.steps):
             if cancelled is not None and cancelled():
@@ -386,9 +417,23 @@ class Prepared:
             if on_step is not None:
                 on_step(index, total, step, session_step)
             asked = {**_revived_options(entry.get('options', {})), **options}
+            plans, planned = _fit_plans(
+                fn, spec, args, asked.get('plans'), named
+            )
+            asked.pop('plans', None)
+            if plans:
+                asked['plans'] = plans
+            if planned:
+                done.planned[step] = {
+                    param: plan.summary for param, plan in planned.items()
+                }
             done.results[step] = recorder.run(fn, session_step, args, **asked)
             done.steps[step] = session_step
             outputs[step] = outputs_of(spec, done.results[step], args)
+            for plan in plans.values():
+                for value in outputs[step].values():
+                    if len(plan.output_axes) == np.ndim(value):
+                        named[id(value)] = tuple(plan.output_axes)
             if on_done is not None:
                 on_done(step, session_step)
         return done
@@ -422,6 +467,45 @@ def replay(
     prepared = prepare(recipe, registry, targets)
     done = prepared.run(roots, recorder, overrides=overrides)
     return {step: done.results[step] for step in prepared.targets}
+
+
+def _fit_plans(
+    fn: Callable,
+    spec: OpSpec,
+    args: Mapping[str, Any],
+    recorded: Mapping[str, AdaptationPlan] | None,
+    named: Mapping[int, tuple[str | None, ...]],
+) -> tuple[dict[str, AdaptationPlan], dict[str, AdaptationPlan]]:
+    """The axis plans a step runs with, and which of them were made here.
+
+    A recorded plan is kept when it was made for data with as many axes as
+    the data at hand. Otherwise -- a stack where a plane was recorded, or no
+    plan recorded at all -- the data is planned afresh by scikit-ops'
+    planner, which never discards data: axes the op does not consume are
+    iterated. A fresh plan that changes nothing is left out.
+    """
+    from skop import plan as make_plan
+
+    plans = dict(recorded or {})
+    planned: dict[str, AdaptationPlan] = {}
+    for param in spec.params:
+        value = args.get(param.name)
+        if param.axes is None or value is None or not hasattr(value, 'shape'):
+            continue
+        ndim = len(value.shape)
+        kept = plans.get(param.name)
+        if kept is not None and len(kept.input_axes) == ndim:
+            continue
+        labels = named.get(id(value))
+        if labels is None or len(labels) != ndim:
+            labels = (None,) * ndim
+        fresh = make_plan(fn, param.name, value, list(labels))
+        if _changes_nothing(fresh):
+            plans.pop(param.name, None)
+        else:
+            plans[param.name] = fresh
+            planned[param.name] = fresh
+    return plans, planned
 
 
 def _default_namer(

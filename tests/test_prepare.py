@@ -160,3 +160,70 @@ def test_a_multi_output_consumer_replays(recorder, image, tmp_path):
     )
     done = prepared.run({'image': image}, fresh(tmp_path))
     assert np.array_equal(done.results['high'], blur(np.maximum(image, 0.5)))
+
+
+# -- data with more axes than was recorded -----------------------------------
+
+
+def plane_recipe(recorder, image):
+    from ops import plane
+
+    recorder.root('image', image)
+    flat = recorder.run(plane, 'flat', {'image': image})
+    recorder.run(plane, 'flatter', {'image': flat})
+    return export(recorder.graph(), ['flatter'], recorder.store)
+
+
+def test_an_input_read_only_by_planned_ops_takes_more_axes(recorder, image):
+    prepared = prepare(plane_recipe(recorder, image), REGISTRY)
+    (need,) = prepared.roots
+    assert need.plannable
+    assert need.fits(2) and need.fits(3) and not need.fits(1)
+
+
+def test_an_input_an_op_reads_whole_wants_its_axes(recorder, image):
+    prepared = prepare(recipe_of(recorder, image), REGISTRY)
+    (need,) = prepared.roots
+    assert not need.plannable and not need.fits(3)
+    with pytest.raises(UnboundRoot, match='wants 2 axes, got 3'):
+        prepared.check({'image': np.stack([image, image])})
+
+
+def test_a_stack_is_run_plane_by_plane_through_every_step(
+    recorder, image, tmp_path
+):
+    prepared = prepare(plane_recipe(recorder, image), REGISTRY)
+    stack = np.stack([image, image * 2, image * 3])
+    done = prepared.run(
+        {'image': stack}, fresh(tmp_path), axes={'image': ['z', 'y', 'x']}
+    )
+    assert done.results['flatter'].shape == stack.shape
+    assert np.allclose(done.results['flatter'], stack + 2)
+    assert set(done.planned) == {'flat', 'flatter'}
+    assert 'per z' in done.planned['flat']['image']
+    # The second step was handed the first's stacked output, and knew its
+    # axes from the plan that made it.
+    assert 'per z' in done.planned['flatter']['image']
+
+
+def test_unnamed_axes_are_planned_too(recorder, image, tmp_path):
+    prepared = prepare(plane_recipe(recorder, image), REGISTRY)
+    stack = np.stack([image, image])
+    done = prepared.run({'image': stack}, fresh(tmp_path))
+    assert done.results['flatter'].shape == stack.shape
+    assert 'axis 0' in done.planned['flat']['image']
+
+
+def test_data_of_the_recorded_shape_needs_no_new_plan(
+    recorder, image, tmp_path
+):
+    prepared = prepare(plane_recipe(recorder, image), REGISTRY)
+    done = prepared.run({'image': image}, fresh(tmp_path))
+    assert done.planned == {}
+
+
+def test_the_plan_a_replay_made_is_recorded(recorder, image, tmp_path):
+    prepared = prepare(plane_recipe(recorder, image), REGISTRY)
+    session = fresh(tmp_path)
+    prepared.run({'image': np.stack([image, image])}, session)
+    assert 'plans' in session.graph().current('flat').options

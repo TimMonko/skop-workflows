@@ -300,3 +300,15 @@ Promoted decisions move into [`adr/`](adr/); their numbers stay here.
     array the recorder already knows is used as it is, never declared again
     under the recipe's name, so a layer keeps its identity and a recipe can
     chain onto a step's output. `replay()` is a thin wrapper.
+64. **A replay fits each step's axis plan to the data it is handed.** A
+    recorded plan is kept when it was made for data with as many axes as the
+    data at hand; otherwise the data is planned afresh by scikit-ops'
+    planner, which iterates the axes an op does not consume, using the
+    axis names the host passes for each root and the output axes of earlier
+    plans. So an input read only by ops that declare `Axes` accepts data
+    with more axes than were recorded (`RootNeed.plannable`): a recipe made
+    on one plane runs plane by plane over a stack. What was planned is
+    reported (`Replayed.planned`) and recorded with the run. Caveat:
+    scikit-ops' `Runner` applies plans only to ops that name an
+    environment, so a host-side op declaring `Axes` is handed the whole
+    stack there (see review item 6).
