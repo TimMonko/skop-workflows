@@ -723,13 +723,31 @@ def _recorded_options(options: Mapping[str, Any]) -> dict[str, Any]:
                 if isinstance(plan, AdaptationPlan)
                 else plan
                 for name, plan in value.items()
+                if not _changes_nothing(plan)
             }
+            if not value:
+                continue
         found[key] = to_json(value)
         if not is_json(found[key]):
             raise TypeError(
                 f'{key}={value!r} is not JSON, so it cannot be recorded'
             )
     return found
+
+
+def _changes_nothing(plan: Any) -> bool:
+    """Whether an axis plan hands the array to the op exactly as it is.
+
+    Such a plan says nothing worth keeping, and a recipe that carried it
+    would pin the shape of the image it was recorded on.
+    """
+    if not isinstance(plan, AdaptationPlan):
+        return False
+    return (
+        not plan.select
+        and not plan.iterate
+        and tuple(plan.transpose) == tuple(range(len(plan.transpose)))
+    )
 
 
 def _revived_options(options: Mapping[str, Any]) -> dict[str, Any]:

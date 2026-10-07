@@ -10,11 +10,11 @@ from __future__ import annotations
 
 from enum import Enum
 from pathlib import Path
-from typing import NamedTuple
+from typing import Annotated, NamedTuple
 
 import numpy as np
 import skop
-from skop import Out, op
+from skop import Axes, Out, op
 from skop.types import ImageOf, LabelsOf
 
 
@@ -134,6 +134,15 @@ def configured(
     return np.asarray(image, dtype=float)
 
 
+@op()
+def plane(
+    image: Annotated[ImageOf[np.ndarray], Axes('y', 'x')],
+) -> ImageOf[np.ndarray]:
+    """A strictly 2-D op, so a stack has to be planned onto it."""
+    assert np.ndim(image) == 2
+    return np.asarray(image, dtype=float) + 1
+
+
 ALL = (
     blur,
     threshold,
@@ -148,6 +157,7 @@ ALL = (
     blur_then_threshold,
     split_workflow,
     configured,
+    plane,
 )
 
 #: Every op above by its ID, as a host's registry holds them.

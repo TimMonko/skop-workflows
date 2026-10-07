@@ -438,3 +438,28 @@ def test_kept_pixels_are_held_not_copied(recorder, image):
     painted = blurred + 1
     recorder.accept_edit('blurred', painted)
     assert recorder.store.get(recorder.graph().accepted('blurred')) is painted
+
+
+def test_an_axis_plan_that_changes_nothing_is_not_recorded(recorder, image):
+    import skop
+    from ops import plane
+
+    recorder.root('image', image)
+    passing = skop.plan(plane, 'image', image, ['y', 'x'])
+    recorder.run(plane, 'flat', {'image': image}, plans={'image': passing})
+    assert recorder.graph().current('flat').options == {}
+
+
+def test_an_axis_plan_that_does_something_is_recorded(recorder, image):
+    import skop
+    from ops import plane
+
+    stack = np.stack([image, image])
+    recorder.root('stack', stack)
+    iterating = skop.plan(plane, 'image', stack, ['z', 'y', 'x'])
+    assert iterating.iterate  # a stack, run plane by plane
+    out = recorder.run(
+        plane, 'flat', {'image': stack}, plans={'image': iterating}
+    )
+    assert out.shape == stack.shape
+    assert set(recorder.graph().current('flat').options['plans']) == {'image'}
