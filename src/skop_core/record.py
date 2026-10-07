@@ -16,6 +16,13 @@ Handle = str
 
 RUN = 'run'
 ROOT = 'root'
+
+#: A run's status. Only an ``ok`` run can become a step's current run: a
+#: cancelled op may hand back what it had computed so far, which is kept for
+#: inspection but never stands for the step.
+OK = 'ok'
+FAILED = 'failed'
+CANCELLED = 'cancelled'
 EDITED = 'edited'
 ACCEPTED = 'accepted'
 REVERTED = 'reverted'
@@ -32,13 +39,25 @@ class Run:
     inputs: dict[str, Handle] = field(default_factory=dict)
     outputs: dict[str, Handle] = field(default_factory=dict)
     params: dict[str, Any] = field(default_factory=dict)
-    status: str = 'ok'
+    status: str = OK
     error: str | None = None
     op_version: str | None = None
     #: The run of the workflow that called this one, when a workflow did. A
     #: workflow's own run is the whole call and its nested runs are what it
     #: did; the graph shows the first and keeps the second as detail.
     parent: str | None = None
+    #: What the inner runner was asked besides the op's arguments -- an
+    #: environment variant, axis plans, a position -- as JSON, so that running
+    #: the step again asks the same (see ``Recorder.run``).
+    options: dict[str, Any] = field(default_factory=dict)
+    #: The parameters that name a file -- a model's weights, say -- kept apart
+    #: from ``params`` because a recipe never carries a path: it asks for one
+    #: as a root at replay, with only the file's name as a hint (decision 6).
+    paths: dict[str, str] = field(default_factory=dict)
+    #: When the call started (UTC, ISO 8601) and how long it took, in
+    #: seconds: expense is measured rather than declared (decision 8).
+    started: str | None = None
+    duration: float | None = None
 
     @property
     def kind(self) -> str:
@@ -104,12 +123,17 @@ class Detached:
 
 @dataclass(frozen=True)
 class Event:
-    """A mark on an existing run: hand-edited, or the edit accepted."""
+    """A mark on an existing run: edited, reverted, or the edit kept."""
 
     id: str
     kind: str
     run: str
     note: str | None = None
+    #: Where a kept edit's pixels were stored (``accepted`` only). The step's
+    #: output is these from then on, and a recipe asks for them as a root.
+    handle: Handle | None = None
+    #: Which of the run's outputs the kept pixels replace, when it has several.
+    output: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -117,6 +141,8 @@ class Event:
             'kind': self.kind,
             'run': self.run,
             'note': self.note,
+            'handle': self.handle,
+            'output': self.output,
         }
 
     @classmethod
@@ -126,10 +152,16 @@ class Event:
             kind=data['kind'],
             run=data['run'],
             note=data.get('note'),
+            handle=data.get('handle'),
+            output=data.get('output'),
         )
 
 
-def from_dict(data: dict[str, Any]) -> Run | Root | Detached | Event:
+#: Anything the log holds.
+Record = Run | Root | Detached | Event
+
+
+def from_dict(data: dict[str, Any]) -> Record:
     if data['kind'] == RUN:
         return Run.from_dict(data)
     if data['kind'] == ROOT:
