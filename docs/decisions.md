@@ -290,3 +290,13 @@ Promoted decisions move into [`adr/`](adr/); their numbers stay here.
     again and a step be rerun from where it was. The price: data changed in
     place is changed for every version that refers to it, and a root's data
     does not survive the session (a recipe asks for it at replay anyway).
+63. **Replay is prepare, check, run.** `prepare(recipe, registry, targets)`
+    says what a replay needs before any data is at hand: its steps, each
+    root (axes, dtype, the role its readers give it, a path's hint, the step
+    kept pixels stood in for) and the ops that do not resolve. `run` binds
+    the roots, names each session step (decision 50: same op on the same
+    inputs is the same step, other inputs get `step_2`), tells the host
+    before and after each step, and stops between steps when cancelled. An
+    array the recorder already knows is used as it is, never declared again
+    under the recipe's name, so a layer keeps its identity and a recipe can
+    chain onto a step's output. `replay()` is a thin wrapper.

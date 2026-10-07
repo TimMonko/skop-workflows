@@ -241,9 +241,11 @@ def test_one_array_given_for_two_roots(recorder, image, tmp_path):
     again = fresh(tmp_path)
     replay(recipe, {'a': image, 'b': image}, again)
     graph = again.graph()
+    # The store knows an array by identity, so one array is one root: both
+    # parameters read it, and lineage says so.
     assert graph.sources_of(graph.current('sum')) == {
         'a': 'root:a',
-        'b': 'root:b',
+        'b': 'root:a',
     }
 
 
