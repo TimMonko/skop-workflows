@@ -146,3 +146,50 @@ def test_puts_from_two_threads_do_not_collide(backend, tmp_path):
     for thread in threads:
         thread.join()
     assert len(set(handles)) == 40
+
+
+class TestReferences:
+    """A root is held by reference: never written, handed back as itself."""
+
+    def test_a_referred_object_comes_back_as_itself(self, store, image):
+        handle = store.refer('image', image)
+        assert store.get(handle) is image
+        assert store.handle_of(image) == handle
+
+    def test_nothing_is_written(self, store, image, tmp_path):
+        before = sorted(p.name for p in (tmp_path / 'store').rglob('*'))
+        store.refer('image', image)
+        after = sorted(p.name for p in (tmp_path / 'store').rglob('*'))
+        assert before == after
+
+    def test_it_is_described_without_being_read(self, store, image):
+        handle = store.refer('ch1: DAPI', image.astype(np.uint8))
+        assert store.describe(handle) == {
+            'name': 'ch1: DAPI',
+            'ndim': 2,
+            'dtype': 'uint8',
+        }
+
+    def test_each_reference_is_a_new_handle(self, store, image):
+        first = store.refer('image', image)
+        second = store.refer('image', image)
+        assert first != second
+        assert store.handle_of(image) == second
+
+    def test_the_newest_version_is_kept_alive(self, store):
+        handle = store.refer('image', np.ones(3))  # nobody else holds it
+        gc.collect()
+        assert np.array_equal(store.get(handle), np.ones(3))
+
+    def test_an_older_version_lives_only_as_long_as_its_owner(self, store):
+        older = store.refer('image', np.ones(3))
+        store.refer('image', np.zeros(3))
+        gc.collect()
+        with pytest.raises(KeyError, match='no longer'):
+            store.get(older)
+        # Still described: what it was is recorded, not read.
+        assert store.describe(older)['ndim'] == 1
+
+    def test_what_is_not_array_shaped_is_refused(self, store):
+        with pytest.raises(TypeError, match='not an array'):
+            store.refer('things', {'a': 1})

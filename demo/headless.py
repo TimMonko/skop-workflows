@@ -85,9 +85,12 @@ def main() -> int:
     normalized = recorder.run(
         percentile, 'normalized', {'image': image, 'low': 1.0, 'high': 99.8}
     )
+    root = recorder.graph().current_root('image')
     check(
-        'the root is stored under its name',
-        recorder.store.handle_of(image) == 'image@v1',
+        'the root is held under its name, as itself, not copied',
+        root.name == 'image'
+        and recorder.store.get(root.handle) is image
+        and not (work / 'session' / 'arrays' / 'image').exists(),
     )
 
     print('\n3-4. a blur, tried at three sigmas, then a threshold')
@@ -486,7 +489,7 @@ def main() -> int:
     )
     check(
         'the workflow read the root, and parameters are recorded as JSON',
-        parent.inputs == {'image': 'image@v1'}
+        graph.sources_of(parent) == {'image': 'root:image'}
         and parent.params == {'sigma': 3.0}
         and children[0].params == {'sigma': 3.0},
     )

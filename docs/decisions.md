@@ -280,3 +280,13 @@ Promoted decisions move into [`adr/`](adr/); their numbers stay here.
     checkout (True-North) is retired: nothing reads it, nothing is ported to
     or from it, and its drift from scikit-ops' copy no longer matters.
     (Settles the question decision 45 left open.)
+62. **A root is held by reference, never copied.** `Recorder.root` calls
+    `Store.refer`, which keeps the object itself and what it looked like
+    (name, ndim, dtype) and writes nothing; `get` hands back that very
+    object, so identity survives and a lazy array is never read in full.
+    The newest version of each name is held strongly, older ones weakly.
+    Kept pixels (57) are held the same way. What an op makes is still
+    written (`Store.put`), since that is what lets a deleted result be drawn
+    again and a step be rerun from where it was. The price: data changed in
+    place is changed for every version that refers to it, and a root's data
+    does not survive the session (a recipe asks for it at replay anyway).

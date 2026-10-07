@@ -198,7 +198,7 @@ class Recorder:
         its own record, so a root that moves under its consumers is visible in
         the log and makes them stale.
         """
-        handle = self.store.put(name, array)
+        handle = self.store.refer(name, array)
         self.store.append(Root(id=_new_id(), name=name, handle=handle))
         return handle
 
@@ -262,8 +262,9 @@ class Recorder:
                 name = next(iter(run.outputs))
             elif name not in run.outputs:
                 raise KeyError(f'{step!r} has no output {name!r}')
+            # The user's pixels, like a root's: held, not copied.
             path = step if len(run.outputs) == 1 else f'{step}.{name}'
-            handle = self.store.put(path, array)
+            handle = self.store.refer(path, array)
             output = name if len(run.outputs) > 1 else None
         event = Event(
             id=_new_id(),

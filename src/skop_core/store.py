@@ -16,6 +16,7 @@ import contextlib
 import json
 import re
 import threading
+import uuid
 import weakref
 from pathlib import Path
 from typing import Any, Protocol
@@ -81,10 +82,93 @@ def as_storable(value: Any) -> np.ndarray:
     return array
 
 
+class References:
+    """What a store holds by reference: never written, handed back as itself.
+
+    A root is the user's data -- a layer, a file a script opened -- and it is
+    already somewhere. Copying it into the store on every declaration costs a
+    whole image each time, and a lazy array would be read in full. So a root is
+    *referred to*: the store keeps the object and what it looked like (name,
+    ndim, dtype), and ``get`` gives back that very object.
+
+    The newest version of each name is held strongly, so a script that
+    declares a root and drops its own variable can still replay it. An older
+    version is held weakly: it lives as long as its owner does, and is gone
+    once nothing else holds it. What it was stays describable.
+
+    The cost of holding rather than copying: an object changed in place --
+    a painted labels layer -- is changed for every version that refers to
+    it. A reference cannot travel back in time; staleness still works,
+    because the host declares the root again after an edit.
+    """
+
+    def __init__(self) -> None:
+        self._strong: dict[Handle, object] = {}
+        self._weak: dict[Handle, weakref.ref] = {}
+        self._described: dict[Handle, dict[str, Any]] = {}
+        self._newest: dict[str, Handle] = {}
+        self._lock = threading.RLock()
+
+    def refer(self, name: str, value: Any) -> Handle:
+        shape = getattr(value, 'shape', None)
+        if shape is None or getattr(value, 'dtype', None) is None:
+            raise TypeError(
+                f'{type(value).__name__} is not an array, so it cannot be a '
+                f'root'
+            )
+        if not name:
+            raise ValueError('a root name cannot be empty')
+        handle = f'{name}@ref-{uuid.uuid4().hex[:10]}'
+        with self._lock:
+            previous = self._newest.get(name)
+            if previous is not None and previous in self._strong:
+                held = self._strong.pop(previous)
+                try:
+                    self._weak[previous] = weakref.ref(held)
+                except TypeError:  # cannot be weakly held: keep it as it is
+                    self._strong[previous] = held
+            self._strong[handle] = value
+            self._newest[name] = handle
+            self._described[handle] = {
+                'name': name,
+                'ndim': len(shape),
+                'dtype': str(np.dtype(value.dtype)),
+            }
+        return handle
+
+    def knows(self, handle: Handle) -> bool:
+        return handle in self._described
+
+    def get(self, handle: Handle) -> Any:
+        with self._lock:
+            if handle in self._strong:
+                return self._strong[handle]
+            ref = self._weak.get(handle)
+        found = ref() if ref is not None else None
+        if found is None:
+            raise KeyError(
+                f'{handle!r} was held by reference, and its data is no longer '
+                f'alive'
+                if handle in self._described
+                else f'{handle!r} is not a handle this store issued'
+            )
+        return found
+
+    def describe(self, handle: Handle) -> dict[str, Any]:
+        return dict(self._described[handle])
+
+
 class Store(Protocol):
-    """What the recorder needs from wherever the data lives."""
+    """What the recorder needs from wherever the data lives.
+
+    Two ways in. ``put`` writes what an op made, so it can be read back
+    after its producer is gone. ``refer`` holds a root -- data that already
+    lives somewhere -- without writing it (see :class:`References`).
+    """
 
     def put(self, path: str, array: Any) -> Handle: ...
+
+    def refer(self, name: str, value: Any) -> Handle: ...
 
     def get(self, handle: Handle) -> np.ndarray: ...
 
@@ -119,6 +203,7 @@ class SimpleStore:
         self._ids: dict[int, tuple[weakref.ref, Handle]] = {}
         self._lock = threading.RLock()
         self._records: list[Record] | None = None
+        self._refs = References()
 
     # -- arrays ----------------------------------------------------------
 
@@ -134,7 +219,14 @@ class SimpleStore:
             self._remember(array, handle)
             return handle
 
+    def refer(self, name: str, value: Any) -> Handle:
+        handle = self._refs.refer(name, value)
+        self._remember(value, handle)
+        return handle
+
     def get(self, handle: Handle) -> np.ndarray:
+        if self._refs.knows(handle):
+            return self._refs.get(handle)
         target = self._array_path(*self._split(handle))
         if not target.is_file():
             raise KeyError(f'{handle!r} is not a handle this store issued')
@@ -151,6 +243,8 @@ class SimpleStore:
         return handle if ref() is array else None
 
     def describe(self, handle: Handle) -> dict[str, Any]:
+        if self._refs.knows(handle):
+            return self._refs.describe(handle)
         path, version = self._split(handle)
         array = np.load(self._array_path(path, version), mmap_mode='r')
         return {'name': path, 'ndim': array.ndim, 'dtype': str(array.dtype)}

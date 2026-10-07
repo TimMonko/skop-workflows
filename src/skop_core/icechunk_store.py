@@ -41,7 +41,7 @@ import numpy as np
 import zarr
 
 from .record import Handle, Record, from_dict
-from .store import as_storable, decode_name, encode_name
+from .store import References, as_storable, decode_name, encode_name
 
 if TYPE_CHECKING:
     from .store import Store
@@ -67,6 +67,7 @@ class IcechunkStore:
         self._versions: dict[str, int] = {}
         self._readers: dict[str, Any] = {}
         self._lock = threading.RLock()
+        self._refs = References()
         self._load()
 
     # -- arrays ----------------------------------------------------------
@@ -86,7 +87,15 @@ class IcechunkStore:
             self._remember(array, handle)
             return handle
 
+    def refer(self, name: str, value: Any) -> Handle:
+        """Hold a root without writing it; see ``References``."""
+        handle = self._refs.refer(name, value)
+        self._remember(value, handle)
+        return handle
+
     def get(self, handle: Handle) -> np.ndarray:
+        if self._refs.knows(handle):
+            return self._refs.get(handle)
         with self._lock:
             snapshot, place = self._where(handle)
             array = zarr.open_array(
@@ -105,6 +114,8 @@ class IcechunkStore:
         return handle if ref() is array else None
 
     def describe(self, handle: Handle) -> dict[str, Any]:
+        if self._refs.knows(handle):
+            return self._refs.describe(handle)
         with self._lock:
             snapshot, place = self._where(handle)
             array = zarr.open_array(

@@ -423,3 +423,18 @@ def test_a_value_that_is_not_array_shaped_is_refused(recorder, image):
     recorder.root('image', image)
     with pytest.raises(TypeError, match='needs an array'):
         recorder.run(blur, 'blurred', {'image': [[1, 2], [3, 4]]})
+
+
+def test_declaring_a_root_copies_nothing(recorder, image, tmp_path):
+    handle = recorder.root('image', image)
+    assert recorder.store.get(handle) is image
+    assert not list((tmp_path / 'store').rglob('*image*'))
+
+
+def test_kept_pixels_are_held_not_copied(recorder, image):
+    recorder.root('image', image)
+    blurred = recorder.run(blur, 'blurred', {'image': image})
+    recorder.mark_edited('blurred')
+    painted = blurred + 1
+    recorder.accept_edit('blurred', painted)
+    assert recorder.store.get(recorder.graph().accepted('blurred')) is painted
