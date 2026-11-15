@@ -13,9 +13,10 @@ from pathlib import Path
 from typing import Annotated, NamedTuple
 
 import numpy as np
-import skop
-from skop import Axes, Out, op
-from skop.types import ImageOf, LabelsOf
+from opspec.describe import OpSpec
+from opspec.op import Axes, op
+from opspec.runtime import run
+from opspec.types import ImageOf, LabelsOf, Out
 
 
 @op()
@@ -23,6 +24,19 @@ def blur(
     image: ImageOf[np.ndarray], sigma: float = 1.0
 ) -> ImageOf[np.ndarray]:
     """A stand-in for a smoothing op: deterministic, and depends on sigma."""
+    return np.asarray(image, dtype=float) * 0.5 + sigma
+
+
+@op(env='minimal')
+def worker_blur(
+    image: ImageOf[np.ndarray], sigma: float = 1.0
+) -> ImageOf[np.ndarray]:
+    """``blur`` as an op that names an environment.
+
+    The recorder hands such an op to its inner runner; one that names none
+    is a workflow, and runs on the host. The tests give the recorder a
+    stand-in runner, so the environment is never built.
+    """
     return np.asarray(image, dtype=float) * 0.5 + sigma
 
 
@@ -106,14 +120,14 @@ def blur_then_threshold(
     image: ImageOf[np.ndarray], sigma: float = 1.0
 ) -> LabelsOf[np.ndarray]:
     """A workflow: it calls two ops through the ambient runner."""
-    blurred = skop.run(blur, {'image': image, 'sigma': sigma})
-    return skop.run(threshold, {'image': blurred, 'level': 1.0})
+    blurred = run(blur, {'image': image, 'sigma': sigma})
+    return run(threshold, {'image': blurred, 'level': 1.0})
 
 
 @op()
 def split_workflow(image: ImageOf[np.ndarray]) -> Split:
     """A workflow with two outputs, made by a nested op."""
-    return skop.run(split, {'image': image})
+    return run(split, {'image': image})
 
 
 class Mode(Enum):
@@ -161,8 +175,8 @@ ALL = (
 )
 
 #: Every op above by its ID, as a host's registry holds them.
-REGISTRY = {skop.OpSpec.from_op(fn).name: fn for fn in ALL}
+REGISTRY = {OpSpec.from_op(fn).name: fn for fn in ALL}
 
 
 def op_id(fn) -> str:
-    return skop.OpSpec.from_op(fn).name
+    return OpSpec.from_op(fn).name

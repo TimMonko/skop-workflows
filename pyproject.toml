@@ -3,7 +3,7 @@ name = "skop-workflows"
 version = "0.0.0"
 description = "Recordable, replayable, batchable workflows made of ops"
 requires-python = ">=3.10"
-dependencies = ["numpy>=1.26", "scikit-ops"]
+dependencies = ["numpy>=1.26", "opspec>=0.1.0.dev0", "oprunner>=0.1.0.dev0"]
 
 [build-system]
 requires = ["hatchling"]
@@ -29,9 +29,6 @@ icechunk = [
 
 [tool.uv]
 default-groups = ["dev", "viz", "icechunk"]
-
-[tool.uv.sources]
-scikit-ops = { path = "../scikit-ops", editable = true }
 
 [tool.ruff]
 line-length = 79

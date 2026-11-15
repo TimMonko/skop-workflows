@@ -312,3 +312,25 @@ Promoted decisions move into [`adr/`](adr/); their numbers stay here.
     scikit-ops' `Runner` applies plans only to ops that name an
     environment, so a host-side op declaring `Axes` is handed the whole
     stack there (see review item 6).
+65. **The op contract is `opspec` and the runner is `oprunner`, both from
+    PyPI.** scikit-ops split itself into `opspec` (the spec, standard
+    library only), `oprunner` (environments, workers, tiling) and `ophelper`,
+    and released them (0.1.0.dev0, 2026-11). This library depends on the
+    first two and no longer on scikit-ops, so there is no checkout to sit
+    beside and no fork to carry: names come from `opspec.op`,
+    `opspec.describe`, `opspec.types`, `opspec.plan` and `opspec.runtime`,
+    and `InProcess` executes a plan with `oprunner._adapt.execute`.
+    (Supersedes 20 and 26; refines 44 and 45.)
+66. **A workflow runs on the host, inside the recorder's own binding.**
+    `opspec.runtime.bind_runner` and `bind_task` are upstream's form of the
+    `skop.ambient` patch, and `skop_core.ambient` is built on them. But
+    oprunner's `Runner._run_here` binds itself over whatever is bound, so a
+    workflow handed to it would send its calls past the recorder. The
+    recorder therefore calls an op that names no environment itself
+    (`InProcess`), and hands the inner runner only ops that name one. The
+    calls a workflow makes still go to the inner runner, through the
+    recorder. Price: the inner runner's own treatment of a host-side op is
+    skipped, which today is its tiler being passed on to the ops a workflow
+    calls. Asking upstream to leave a bound runner alone would make this
+    unnecessary. (Refines 16 and 54; settles review item 1 of 2026-10-07
+    for this repo.)

@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 from ops import REGISTRY, blur, configured, split, threshold
-from skop import Role
+from opspec.types import Role
 
 from skop_core import InProcess, Recorder, SimpleStore, export, prepare
 from skop_core.recipe import MissingOp, UnboundRoot

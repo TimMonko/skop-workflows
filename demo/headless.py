@@ -19,7 +19,6 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'src'))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-import skop  # noqa: E402
 from demo_ops import (  # noqa: E402
     Direction,
     blur_then_threshold,
@@ -31,13 +30,11 @@ from demo_ops import (  # noqa: E402
     sharpen,
     smooth_then_threshold,
 )
+from opspec.describe import OpSpec  # noqa: E402
+from opspec.op import is_op  # noqa: E402
+from opspec.runtime import run as run_op  # noqa: E402
+from opspec.types import Role  # noqa: E402
 from scenario import blobs, session  # noqa: E402
-from skop import (  # noqa: E402
-    OpSpec,  # noqa: E402
-    Role,
-    ambient,
-    is_op,
-)
 
 from skop_core import (  # noqa: E402
     InProcess,
@@ -45,6 +42,7 @@ from skop_core import (  # noqa: E402
     Recorder,
     RecordingRunner,
     Run,
+    ambient,
     batch,
     export,
     is_json,
@@ -506,7 +504,7 @@ def main() -> int:
     scripted = session(work, 'scripted')
     scripted.root('image', image)
     with ambient(RecordingRunner(scripted)):
-        skop.run(gaussian, {'image': image, 'sigma': 2.0})
+        run_op(gaussian, {'image': image, 'sigma': 2.0})
     check(
         'a plain skop.run is recorded, with no panel in sight',
         scripted.graph().steps() == ['gaussian'],

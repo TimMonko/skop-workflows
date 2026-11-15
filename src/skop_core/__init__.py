@@ -1,5 +1,6 @@
 """skop_core: recordable, replayable workflows made of ops."""
 
+from .ambient import ambient
 from .derived import Graph
 from .params import is_json, to_json
 from .recipe import (
@@ -63,6 +64,7 @@ __all__ = [
     'SimpleStore',
     'Store',
     'UnboundRoot',
+    'ambient',
     'batch',
     'export',
     'is_json',

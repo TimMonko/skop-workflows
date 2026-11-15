@@ -30,16 +30,10 @@ from pathlib import Path, PurePath
 from typing import Any, Protocol, Union, get_args, get_origin
 
 import numpy as np
-from skop import (
-    FUNCTION,
-    NDARRAY,
-    PATH,
-    AdaptationPlan,
-    OpSpec,
-    is_op,
-    type_spec,
-)
-from skop.types import Array
+from opspec.describe import NDARRAY, PATH, OpSpec, type_spec
+from opspec.op import FUNCTION, is_op
+from opspec.plan import AdaptationPlan
+from opspec.types import Array
 
 from .derived import Graph
 from .params import is_json, to_json
@@ -87,17 +81,20 @@ class InProcess:
         plans = dict(options.get('plans') or {})
         for name, labels in (options.get('axes') or {}).items():
             if name not in plans:
-                from skop import plan
+                from opspec.plan import plan
 
                 plans[name] = plan(
                     fn, name, args[name], labels, options.get('position')
                 )
         if not plans:
             return fn(**args)
-        from skop._adapt import execute
+        from oprunner._adapt import execute
 
         return execute(OpSpec.from_op(fn), fn, dict(args), plans)
 
+
+#: Where a workflow is called: this process.
+_HERE = InProcess()
 
 #: The run, and its step, that a nested call is made from. A context variable
 #: rather than an attribute: a workflow's calls happen on whichever thread the
@@ -357,7 +354,11 @@ class Recorder:
         token = _enclosing.set((run_id, step))
         try:
             with self._nested(spec, through, options):
-                result = self.inner.run(fn, args, **options)
+                # A workflow runs here, on the host, whatever the inner
+                # runner is: the calls it makes are what go to that runner,
+                # through the recorder bound above.
+                runner = _HERE if spec.is_workflow else self.inner
+                result = runner.run(fn, args, **options)
             outputs = self._save(spec, step, result, args)
         except Exception as error:  # noqa: BLE001 -- a failed run is recorded
             cancelled = any(handed.cancelled for handed in watched)
@@ -474,7 +475,7 @@ class Recorder:
         if not spec.is_workflow:
             yield
             return
-        from skop import ambient
+        from .ambient import ambient
 
         with ambient(
             through or RecordingRunner(self),

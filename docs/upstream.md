@@ -97,6 +97,37 @@ and `C:\Users\Tim\napari`.
   shadows the pinned version in each env; the env lock digest alone does not
   identify op code.
 
+## The split into opspec, oprunner and ophelper
+
+- Checked 2026-11-15 against `apposed/scikit-ops` main (`70cfb58`,
+  2026-11-11) and PyPI.
+- `opspec` 0.1.0.dev0 (no dependencies), `oprunner` 0.1.0.dev0 (appose,
+  numpy, opspec, psutil), `ophelper` 0.1.0.dev0 and `scikit-ops` 0.1.0.dev2
+  are on PyPI. `skop` is now only the collection of ops ("skop is the
+  working name; the collection will be renamed before release").
+- opspec's top level exports nothing. Names are imported from its modules:
+  `opspec.op` (`op`, `is_op`, `Choices`, `Axes`, `FUNCTION`),
+  `opspec.describe` (`OpSpec`, `ParamSpec`, `OutputSpec`, `type_spec`, the
+  wire types), `opspec.types` (`Role`, `Array`, `ImageOf`, `Out`, `Mut`,
+  `Dtype`), `opspec.plan` (`AdaptationPlan`, `plan`), `opspec.runtime`
+  (`progress`, `cancel_requested`, `run`, `bind_runner`, `bind_task`).
+- **`opspec.runtime` is the ambient mechanism now.** `run(op, args)` goes to
+  the bound runner, or calls the op directly. `oprunner.Runner._run_here`
+  binds itself (`bind_runner(here)`) without looking for a runner already
+  bound, so the outermost binder does not win there (decision 66).
+- **Op collections.** A package registers with the entry point group
+  `opspec.collections` (`tnia-ops = "tnia_ops"`), brings its own
+  `envs/<id>/pixi.toml`, and its environments are built as
+  `<package>--<id>`. napari-skopkit lists every installed collection.
+  `discover()` with no argument is not built (design 0022).
+- `skop-napari` is renamed **napari-skopkit** (0.1.0.dev0 on PyPI) and
+  there is a `fiji-skopkit`. The branch `skop-workflows` of the local
+  `skop-napari` checkout (Record and Replay panels, 20 commits) predates
+  the rename and the split.
+- Upstream issue [napari-skopkit#2](https://github.com/apposed/skop-napari/issues/2)
+  "Import and export workflows" (ctrueden) is where this library's recipe
+  would be proposed.
+
 ## The recorder branch (to be replaced)
 
 Branch `recorder_and_icechunk` of scikit-ops: `src/skop/record.py`,

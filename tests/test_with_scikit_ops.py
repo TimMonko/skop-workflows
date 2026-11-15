@@ -11,33 +11,34 @@ import threading
 
 import numpy as np
 import pytest
-import skop
+from oprunner import Runner
 from ops import blur, blur_then_threshold
-from skop import op
-from skop.types import ImageOf
+from opspec.op import op
+from opspec.runtime import cancel_requested, progress, run
+from opspec.types import ImageOf
 
-from skop_core import Recorder, RecordingRunner
+from skop_core import Recorder, RecordingRunner, ambient
 
 
 @op()
 def reports(image: ImageOf[np.ndarray]) -> ImageOf[np.ndarray]:
     """A workflow that says how far along it is, then calls an op."""
-    skop.progress('halfway', 1, 2)
-    return skop.run(blur, {'image': image})
+    progress('halfway', 1, 2)
+    return run(blur, {'image': image})
 
 
 @op()
 def stops(image: ImageOf[np.ndarray]) -> ImageOf[np.ndarray]:
     """A workflow that stops early when asked, between two ops."""
-    first = skop.run(blur, {'image': image})
-    if skop.cancel_requested():
+    first = run(blur, {'image': image})
+    if cancel_requested():
         return first
-    return skop.run(blur, {'image': first})
+    return run(blur, {'image': first})
 
 
 @pytest.fixture
 def runner():
-    with skop.Runner() as found:
+    with Runner() as found:
         yield found
 
 
@@ -57,8 +58,8 @@ def test_a_workflow_on_the_real_runner_records_its_calls(recorded, image):
 
 def test_a_listener_installed_by_hand_records_a_script(recorded, image):
     recorded.root('image', image)
-    with skop.ambient(RecordingRunner(recorded)):
-        skop.run(blur, {'image': image, 'sigma': 3.0})
+    with ambient(RecordingRunner(recorded)):
+        run(blur, {'image': image, 'sigma': 3.0})
     assert recorded.graph().current('blur').params == {'sigma': 3.0}
 
 

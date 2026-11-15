@@ -17,9 +17,9 @@ from enum import Enum
 from typing import Annotated
 
 import numpy as np
-import skop
-from skop import Choices, op
-from skop.types import ImageOf, LabelsOf
+from opspec.op import Choices, op
+from opspec.runtime import run
+from opspec.types import ImageOf, LabelsOf
 
 
 @op()
@@ -110,8 +110,8 @@ def smooth_then_threshold(
     whichever runner started the workflow is the one that runs them -- which
     is how a recorder, standing where the runner stood, sees both.
     """
-    smoothed = skop.run(gaussian, {'image': image, 'sigma': sigma})
-    return skop.run(otsu, {'image': smoothed})
+    smoothed = run(gaussian, {'image': image, 'sigma': sigma})
+    return run(otsu, {'image': smoothed})
 
 
 @op()
@@ -120,7 +120,7 @@ def blur_then_threshold(
     blur: Annotated[Callable, Choices(gaussian=gaussian)] = gaussian,
 ) -> LabelsOf[np.ndarray]:
     """A workflow that is handed an op: which blur to use is a parameter."""
-    return skop.run(otsu, {'image': skop.run(blur, {'image': image})})
+    return run(otsu, {'image': run(blur, {'image': image})})
 
 
 class Direction(Enum):

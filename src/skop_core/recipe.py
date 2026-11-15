@@ -20,7 +20,9 @@ from pathlib import Path, PurePath
 from typing import Any
 
 import numpy as np
-from skop import AdaptationPlan, OpSpec, Role
+from opspec.describe import OpSpec
+from opspec.plan import AdaptationPlan
+from opspec.types import Role
 
 from .derived import Graph
 from .runner import Recorder, _changes_nothing, _revived_options, outputs_of
@@ -484,7 +486,7 @@ def _fit_plans(
     planner, which never discards data: axes the op does not consume are
     iterated. A fresh plan that changes nothing is left out.
     """
-    from skop import plan as make_plan
+    from opspec.plan import plan as make_plan
 
     plans = dict(recorded or {})
     planned: dict[str, AdaptationPlan] = {}

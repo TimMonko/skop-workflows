@@ -23,6 +23,7 @@ from ops import (
     split_workflow,
     threshold,
     total,
+    worker_blur,
 )
 
 from skop_core import MissingRoot, RecordingRunner
@@ -301,7 +302,7 @@ def test_runner_options_are_recorded_and_replayed_on_update(recorder, image):
     recorder.inner = Remembers()
     recorder.root('image', image)
     recorder.run(
-        blur,
+        worker_blur,
         'blurred',
         {'image': image},
         variant='cuda',
@@ -311,8 +312,10 @@ def test_runner_options_are_recorded_and_replayed_on_update(recorder, image):
     run = recorder.graph().current('blurred')
     assert run.options == {'variant': 'cuda', 'position': {'z': 3}}
     recorder.root('image', image + 1)
-    recorder.update(blur, 'blurred')
-    assert seen[-1] == {'variant': 'cuda', 'position': {'z': 3}}
+    recorder.update(worker_blur, 'blurred')
+    # The recorder's own watch on a cancel rides along as on_start.
+    asked = {k: v for k, v in seen[-1].items() if k != 'on_start'}
+    assert asked == {'variant': 'cuda', 'position': {'z': 3}}
 
 
 def test_a_recording_runner_names_steps_by_their_inputs(recorder, image):
@@ -374,7 +377,10 @@ def test_a_cancel_that_ends_in_an_error_is_a_cancel(recorder, image):
     recorder.inner = Stoppable(fail=True)
     with pytest.raises(RuntimeError):
         recorder.run(
-            blur, 'blurred', {'image': image}, on_start=lambda t: t.cancel()
+            worker_blur,
+            'blurred',
+            {'image': image},
+            on_start=lambda t: t.cancel(),
         )
     (run,) = recorder.graph().runs_of('blurred')
     assert run.status == 'cancelled'
@@ -441,22 +447,22 @@ def test_kept_pixels_are_held_not_copied(recorder, image):
 
 
 def test_an_axis_plan_that_changes_nothing_is_not_recorded(recorder, image):
-    import skop
     from ops import plane
+    from opspec.plan import plan
 
     recorder.root('image', image)
-    passing = skop.plan(plane, 'image', image, ['y', 'x'])
+    passing = plan(plane, 'image', image, ['y', 'x'])
     recorder.run(plane, 'flat', {'image': image}, plans={'image': passing})
     assert recorder.graph().current('flat').options == {}
 
 
 def test_an_axis_plan_that_does_something_is_recorded(recorder, image):
-    import skop
     from ops import plane
+    from opspec.plan import plan
 
     stack = np.stack([image, image])
     recorder.root('stack', stack)
-    iterating = skop.plan(plane, 'image', stack, ['z', 'y', 'x'])
+    iterating = plan(plane, 'image', stack, ['z', 'y', 'x'])
     assert iterating.iterate  # a stack, run plane by plane
     out = recorder.run(
         plane, 'flat', {'image': stack}, plans={'image': iterating}
