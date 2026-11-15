@@ -103,10 +103,22 @@ _enclosing: contextvars.ContextVar[tuple[str, str] | None] = (
     contextvars.ContextVar('skop_enclosing_run', default=None)
 )
 
-#: What a scikit-ops runner takes besides the op's own arguments. Anything else
-#: handed to ``RecordingRunner.run`` is an argument of the op.
+#: What oprunner's runner takes besides the op's own arguments. Anything else
+#: handed to ``RecordingRunner.run`` is an argument of the op. ``memory``,
+#: ``tiler`` and ``out`` are passed on and not recorded: they say how much
+#: of this machine to use and where to put the result, not what was computed.
 _OPTIONS = frozenset(
-    {'variant', 'axes', 'plans', 'position', 'on_progress', 'on_start'}
+    {
+        'variant',
+        'axes',
+        'plans',
+        'position',
+        'on_progress',
+        'on_start',
+        'memory',
+        'tiler',
+        'out',
+    }
 )
 #: The options that say *how* to run rather than who to tell: written into the
 #: run, and asked again when the step is run again.

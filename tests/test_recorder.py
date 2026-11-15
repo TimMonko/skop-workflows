@@ -469,3 +469,25 @@ def test_an_axis_plan_that_does_something_is_recorded(recorder, image):
     )
     assert out.shape == stack.shape
     assert set(recorder.graph().current('flat').options['plans']) == {'image'}
+
+
+def test_a_runners_memory_options_are_passed_on_and_not_recorded(
+    recorder, image
+):
+    seen = []
+
+    class Remembers:
+        def run(self, fn, args, **options):
+            seen.append((dict(args), options))
+            return fn(**args)
+
+    recorder.inner = Remembers()
+    recorder.root('image', image)
+    RecordingRunner(recorder).run(
+        worker_blur, {'image': image}, memory='2GB', tiler=None, out=None
+    )
+    args, options = seen[-1]
+    assert set(args) == {'image'}
+    assert options['memory'] == '2GB'
+    run = recorder.graph().current('worker_blur')
+    assert run.params == {} and 'memory' not in run.options
