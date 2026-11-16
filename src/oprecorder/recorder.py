@@ -9,8 +9,9 @@ result back.
 There are two ways in. :class:`Recorder` is called: ``run(fn, step, args)``.
 :class:`RecordingRunner` is *listened through*: it looks like a scikit-ops
 runner, so whatever already runs ops -- a panel, a script, a workflow calling
-``skop.run`` -- is recorded by being pointed at it, and changes nothing else.
-Both end in :meth:`Recorder.run`, which is the only place a run is written.
+``opspec.runtime.run`` -- is recorded by being pointed at it, and changes
+nothing else. Both end in :meth:`Recorder.run`, which is the only place a run
+is written.
 """
 
 from __future__ import annotations
@@ -141,19 +142,16 @@ class Recorder:
     arguments must already have a handle, parameters must be JSON, and the
     result is saved under the step name before the run is appended.
 
-    Parameters
-    ----------
-    store
-        Where arrays and records go.
-    inner
-        The runner that executes; ``oprunner.InProcess`` when none is given.
-    version
-        What ran: the package version, and the git commit for a checkout.
-    step_for
-        Names the step a call fills when the caller does not: a workflow's
-        nested calls, and every call a :class:`RecordingRunner` sees. Given
-        the op's spec and the graph so far; the op's function name when left
-        out.
+    Args:
+        store: Where arrays and records go.
+        inner: The runner that executes; ``oprunner.InProcess`` when none is
+            given.
+        version: What ran: the package version, and the git commit for a
+            checkout.
+        step_for: Names the step a call fills when the caller does not: a
+            workflow's nested calls, and every call a :class:`RecordingRunner`
+            sees. Given the op's spec and the graph so far; the op's function
+            name when left out.
     """
 
     def __init__(
@@ -276,7 +274,7 @@ class Recorder:
         handle, an axis plan. The ones that say how to run are recorded with
         the run, so that running the step again asks the same.
 
-        A workflow's own ``skop.run`` calls come back through a
+        A workflow's own ``opspec.runtime.run`` calls come back through a
         :class:`RecordingRunner` -- ``through``, or one over this recorder --
         so each is recorded as a child of this run, and runs on this
         recorder's inner runner rather than on some default nobody chose.
@@ -531,20 +529,18 @@ class RecordingRunner:
 
     It is built to be *pointed at*, not called by a host that already knows
     what it wants recorded. A panel that runs an op, a script, and a workflow
-    calling ``skop.run`` all say ``runner.run(fn, args, ...)``; give them this
-    in place of the runner and they are recorded, and nothing else about how
-    they work has to change. That is the difference from :class:`Recorder`,
+    calling ``opspec.runtime.run`` all say ``runner.run(fn, args, ...)``; give
+    them this in place of the runner and they are recorded, and nothing else
+    about how they work has to change. That is the difference from :class:`Recorder`,
     which is what a host calls when it is the one deciding to run something.
 
-    Parameters
-    ----------
-    recorder
-        Where the runs are written, and the runner that does the work.
-    step_for
-        Names the step a call fills, given the op's spec and the graph so far.
-        The recorder's own ``step_for`` when left out. A call nested in a
-        workflow is always prefixed with its parent's step, so the same op
-        used in two workflows is two steps.
+    Args:
+        recorder: Where the runs are written, and the runner that does the
+            work.
+        step_for: Names the step a call fills, given the op's spec and the
+            graph so far. The recorder's own ``step_for`` when left out. A
+            call nested in a workflow is always prefixed with its parent's
+            step, so the same op used in two workflows is two steps.
     """
 
     def __init__(

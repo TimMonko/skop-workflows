@@ -334,36 +334,34 @@ class Prepared:
     ) -> Replayed:
         """Run the closure of the targets, recording each step.
 
-        Parameters
-        ----------
-        roots
-            Each root's data -- or, for a path root, the path.
-        recorder
-            Where the runs are recorded. An array this recorder's store
-            already knows is used as it is: it is a root (or a step's output)
-            under its own name already, and declaring it again under the
-            recipe's name would take its identity from it. Only data the
-            store has never seen is declared, under the recipe's name.
-        overrides
-            Parameters to change, by recipe step.
-        name_step
-            The session step a recipe step is recorded as, given the recipe
-            step, its op and its arguments. By default the recipe's name,
-            reused when the same op last ran there on the same inputs, and
-            numbered (``otsu_2``) when the name is taken by other work.
-        on_step, on_done
-            Told ``(index, total, recipe step, session step)`` before a step
-            runs, and ``(recipe step, session step)`` once it is recorded.
-        cancelled
-            Asked before each step; a true answer stops the replay there.
-        axes
-            What each root's axes are called, when the host knows (a layer's
-            axis labels). A recorded axis plan is reused when it fits the
-            data a step is handed; when it does not -- a stack bound where a
-            plane was recorded -- the data is planned afresh with these
-            names, and what came of it is reported in ``Replayed.planned``.
-        options
-            For the runner, on every step: ``on_progress``, ``on_start``.
+        Args:
+            roots: Each root's data -- or, for a path root, the path.
+            recorder: Where the runs are recorded. An array this recorder's
+                store already knows is used as it is: it is a root (or a
+                step's output) under its own name already, and declaring it
+                again under the recipe's name would take its identity from
+                it. Only data the store has never seen is declared, under the
+                recipe's name.
+            overrides: Parameters to change, by recipe step.
+            name_step: The session step a recipe step is recorded as, given
+                the recipe step, its op and its arguments. By default the
+                recipe's name, reused when the same op last ran there on the
+                same inputs, and numbered (``otsu_2``) when the name is taken
+                by other work.
+            on_step: Told ``(index, total, recipe step, session step)``
+                before a step runs.
+            on_done: Told ``(recipe step, session step)`` once a step is
+                recorded.
+            cancelled: Asked before each step; a true answer stops the
+                replay there.
+            axes: What each root's axes are called, when the host knows (a
+                layer's axis labels). A recorded axis plan is reused when it
+                fits the data a step is handed; when it does not -- a stack
+                bound where a plane was recorded -- the data is planned
+                afresh with these names, and what came of it is reported in
+                ``Replayed.planned``.
+            **options: For the runner, on every step: ``on_progress``,
+                ``on_start``.
         """
         overrides = dict(overrides or {})
         stray = sorted(set(overrides) - set(self.steps))
