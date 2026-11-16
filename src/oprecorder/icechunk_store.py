@@ -16,7 +16,7 @@ handle finds its snapshot and path again.
 Icechunk is an optional extra, so import the backend by its own path::
 
     uv sync --group icechunk
-    from skop_core.icechunk_store import IcechunkStore
+    from oprecorder.icechunk_store import IcechunkStore
 
 One instance owns the repository: commits made elsewhere are not seen until
 the store is reopened. It is safe to use from two threads -- a host records

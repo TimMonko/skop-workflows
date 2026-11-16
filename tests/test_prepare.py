@@ -7,8 +7,8 @@ import pytest
 from ops import REGISTRY, blur, configured, split, threshold
 from opspec.types import Role
 
-from skop_core import InProcess, Recorder, SimpleStore, export, prepare
-from skop_core.recipe import MissingOp, UnboundRoot
+from oprecorder import InProcess, Recorder, SimpleStore, export, prepare
+from oprecorder.recipe import MissingOp, UnboundRoot
 
 
 def fresh(tmp_path, name='replay') -> Recorder:

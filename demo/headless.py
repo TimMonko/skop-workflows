@@ -36,7 +36,7 @@ from opspec.runtime import run as run_op  # noqa: E402
 from opspec.types import Role  # noqa: E402
 from scenario import blobs, session  # noqa: E402
 
-from skop_core import (  # noqa: E402
+from oprecorder import (  # noqa: E402
     InProcess,
     MissingRoot,
     Recorder,
@@ -48,17 +48,17 @@ from skop_core import (  # noqa: E402
     is_json,
     replay,
 )
-from skop_visual import (  # noqa: E402
+from oprecorder.mermaid import to_mermaid  # noqa: E402
+from oprecorder.view import (  # noqa: E402
     MISSING,
     STALE,
     layout,
     lineage,
-    to_mermaid,
     view,
 )
 
 try:  # the Icechunk backend is an optional extra
-    from skop_core.icechunk_store import IcechunkStore  # noqa: E402
+    from oprecorder.icechunk_store import IcechunkStore  # noqa: E402
 except ImportError:
     IcechunkStore = None
 

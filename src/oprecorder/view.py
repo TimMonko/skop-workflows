@@ -11,7 +11,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from skop_core import Graph, Run
+from .graph import Graph
+from .record import Run
 
 #: The badge a node wears when nothing is wrong.
 FRESH = 'fresh'

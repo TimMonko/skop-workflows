@@ -17,7 +17,7 @@ from opspec.op import op
 from opspec.runtime import cancel_requested, progress, run
 from opspec.types import ImageOf
 
-from skop_core import Recorder, RecordingRunner, ambient
+from oprecorder import Recorder, RecordingRunner, ambient
 
 
 @op()

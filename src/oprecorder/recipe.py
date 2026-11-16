@@ -24,8 +24,8 @@ from opspec.describe import OpSpec
 from opspec.plan import AdaptationPlan
 from opspec.types import Role
 
-from .derived import Graph
-from .runner import Recorder, _changes_nothing, _revived_options, outputs_of
+from .graph import Graph
+from .recorder import Recorder, _changes_nothing, _revived_options, outputs_of
 from .store import Store
 
 FORMAT = 2

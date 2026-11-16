@@ -39,7 +39,8 @@ def _(Path):
 
     from scenario import build
 
-    from skop_visual import SIGNALS, to_mermaid, view
+    from oprecorder.mermaid import to_mermaid
+    from oprecorder.view import SIGNALS, view
 
     work = Path(tempfile.mkdtemp(prefix='skop-graph-'))
     recorder = build(work)

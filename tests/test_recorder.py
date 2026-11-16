@@ -26,7 +26,7 @@ from ops import (
     worker_blur,
 )
 
-from skop_core import MissingRoot, RecordingRunner
+from oprecorder import MissingRoot, RecordingRunner
 
 
 def test_an_array_from_nowhere_is_refused(recorder, image):

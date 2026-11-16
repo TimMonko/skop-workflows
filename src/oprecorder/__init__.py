@@ -1,7 +1,12 @@
-"""skop_core: recordable, replayable workflows made of ops."""
+"""oprecorder: record op runs, and export and replay them as recipes.
+
+The graph's picture is in submodules, not here, because its badge names
+(``EDITED``, ``FAILED``) differ from the record statuses of the same name:
+``oprecorder.view`` is the model and ``oprecorder.mermaid`` one renderer.
+"""
 
 from .ambient import ambient
-from .derived import Graph
+from .graph import Graph
 from .params import is_json, to_json
 from .recipe import (
     MissingOp,
@@ -29,7 +34,7 @@ from .record import (
     Root,
     Run,
 )
-from .runner import (
+from .recorder import (
     InProcess,
     MissingRoot,
     Recorder,

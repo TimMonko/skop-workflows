@@ -9,7 +9,7 @@ import numpy as np
 import pytest
 from conftest import open_store
 
-from skop_core import Event, Root, Run
+from oprecorder import Event, Root, Run
 
 
 def test_put_then_get_round_trips(store, image):

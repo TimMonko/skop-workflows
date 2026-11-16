@@ -20,9 +20,9 @@ from ops import (
     threshold,
 )
 
-from skop_core import InProcess, Recorder, SimpleStore, batch, export, plan
-from skop_core import replay as _replay
-from skop_core.recipe import FORMAT, MissingOp, UnboundRoot
+from oprecorder import InProcess, Recorder, SimpleStore, batch, export, plan
+from oprecorder import replay as _replay
+from oprecorder.recipe import FORMAT, MissingOp, UnboundRoot
 
 
 def replay(recipe, roots, recorder, **kwargs):

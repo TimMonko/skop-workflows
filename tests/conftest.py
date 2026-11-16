@@ -10,10 +10,10 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from skop_core import InProcess, Recorder, SimpleStore  # noqa: E402
+from oprecorder import InProcess, Recorder, SimpleStore  # noqa: E402
 
 try:  # the Icechunk backend is an optional extra
-    from skop_core.icechunk_store import IcechunkStore
+    from oprecorder.icechunk_store import IcechunkStore
 except ImportError:  # pragma: no cover - depends on the environment
     IcechunkStore = None
 

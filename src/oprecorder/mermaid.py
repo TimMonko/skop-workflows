@@ -7,7 +7,7 @@ the interactive home for it.
 
 from __future__ import annotations
 
-from .model import COLOURS, ROOT_COLOURS, SIGNALS, GraphView
+from .view import COLOURS, ROOT_COLOURS, SIGNALS, GraphView
 
 
 def _class_defs() -> tuple[str, ...]:

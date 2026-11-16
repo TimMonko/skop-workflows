@@ -36,7 +36,7 @@ from opspec.op import FUNCTION, is_op
 from opspec.plan import AdaptationPlan
 from opspec.types import Array
 
-from .derived import Graph
+from .graph import Graph
 from .params import is_json, to_json
 from .record import (
     ACCEPTED,

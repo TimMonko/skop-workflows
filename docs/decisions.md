@@ -347,3 +347,13 @@ Promoted decisions move into [`adr/`](adr/); their numbers stay here.
     runner with the call, which keeps the tiler a caller gives a workflow.
     Needs opspec and oprunner releases with those changes; until then, run
     against a scikit-ops checkout. (Supersedes 66.)
+68. **One package, `oprecorder`, shaped to sit beside opspec and oprunner
+    in scikit-ops.** Curtis asked for this to be upstreamed into
+    scikit-ops (2026-11-15). `skop_core` becomes `oprecorder` (named for
+    the Recorder; "workflow" is scikit-ops' word for an op that calls ops)
+    and `skop_visual` folds into it as `oprecorder.view` and
+    `oprecorder.mermaid`, kept out of the top-level namespace because its
+    badge names clash with record statuses. Modules renamed to say what
+    they hold: `derived` is `graph`, `runner` is `recorder`, `model` is
+    `view`. Code style follows scikit-ops (line length 88, double quotes,
+    Google docstrings), so the move upstream is a move.

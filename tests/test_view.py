@@ -5,7 +5,8 @@ from __future__ import annotations
 import pytest
 from ops import add, blur, blur_then_threshold, broken, threshold
 
-from skop_visual import (
+from oprecorder.mermaid import to_mermaid
+from oprecorder.view import (
     AFFECTED,
     COLOURS,
     EDITED,
@@ -16,7 +17,6 @@ from skop_visual import (
     STALE,
     layout,
     lineage,
-    to_mermaid,
     view,
 )
 

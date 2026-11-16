@@ -1,7 +1,7 @@
 """The demo scenario: a recorded session to look at.
 
 Shared by ``headless.py`` (which asserts it) and the marimo graph app (which
-draws it). Numpy-only ops; nothing built, nothing imported beyond skop_core.
+draws it). Numpy-only ops; nothing built, nothing imported beyond oprecorder.
 """
 
 from __future__ import annotations
@@ -11,7 +11,7 @@ from pathlib import Path
 import numpy as np
 from demo_ops import connect, gaussian, otsu, percentile
 
-from skop_core import InProcess, Recorder, SimpleStore
+from oprecorder import InProcess, Recorder, SimpleStore
 
 
 def blobs(
