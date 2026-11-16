@@ -33,7 +33,7 @@ def to_json(value: Any) -> Any:
         return [to_json(item) for item in value]
     if isinstance(value, dict):
         return {key: to_json(item) for key, item in value.items()}
-    item = getattr(value, 'item', None)
+    item = getattr(value, "item", None)
     if callable(item):
         try:
             return to_json(item())
@@ -50,7 +50,6 @@ def is_json(value: Any) -> bool:
         return all(is_json(item) for item in value)
     if isinstance(value, dict):
         return all(
-            isinstance(key, str) and is_json(item)
-            for key, item in value.items()
+            isinstance(key, str) and is_json(item) for key, item in value.items()
         )
     return False

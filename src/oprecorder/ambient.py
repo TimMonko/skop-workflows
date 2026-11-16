@@ -15,7 +15,7 @@ from typing import Any
 
 from opspec.runtime import bind_runner, bind_task, unbind_runner, unbind_task
 
-__all__ = ['HostTask', 'Progress', 'ambient']
+__all__ = ["HostTask", "Progress", "ambient"]
 
 
 @dataclass(frozen=True)
@@ -72,11 +72,9 @@ class _Through:
         self._runner = runner
         self._task = task
 
-    def run(
-        self, fn: Callable, args: dict | None = None, **kwargs: Any
-    ) -> Any:
-        kwargs.setdefault('on_progress', self._task.relay)
-        kwargs.setdefault('on_start', self._task.adopt)
+    def run(self, fn: Callable, args: dict | None = None, **kwargs: Any) -> Any:
+        kwargs.setdefault("on_progress", self._task.relay)
+        kwargs.setdefault("on_start", self._task.adopt)
         return self._runner.run(fn, args, **kwargs)
 
 

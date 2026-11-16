@@ -47,10 +47,10 @@ if TYPE_CHECKING:
     from .store import Store
 
 #: The branch every commit lands on.
-BRANCH = 'main'
+BRANCH = "main"
 
-_ARRAYS = 'arrays'
-_VERSION = re.compile(r'^v(?P<version>\d+)$')
+_ARRAYS = "arrays"
+_VERSION = re.compile(r"^v(?P<version>\d+)$")
 
 
 class IcechunkStore:
@@ -78,11 +78,9 @@ class IcechunkStore:
             session = self._writable()
             version = self._versions.get(path, 0) + 1
             self._versions[path] = version
-            place = f'{_ARRAYS}/{encode_name(path)}/v{version}'
-            zarr.create_array(
-                session.store, name=place, data=stored, overwrite=True
-            )
-            handle = f'{path}@{uuid.uuid4().hex[:8]}'
+            place = f"{_ARRAYS}/{encode_name(path)}/v{version}"
+            zarr.create_array(session.store, name=place, data=stored, overwrite=True)
+            handle = f"{path}@{uuid.uuid4().hex[:8]}"
             self._staged[handle] = place
             self._remember(array, handle)
             return handle
@@ -98,9 +96,7 @@ class IcechunkStore:
             return self._refs.get(handle)
         with self._lock:
             snapshot, place = self._where(handle)
-            array = zarr.open_array(
-                self._reader(snapshot).store, path=place, mode='r'
-            )
+            array = zarr.open_array(self._reader(snapshot).store, path=place, mode="r")
             found = np.asarray(array[...])
             self._remember(found, handle)
             return found
@@ -118,13 +114,11 @@ class IcechunkStore:
             return self._refs.describe(handle)
         with self._lock:
             snapshot, place = self._where(handle)
-            array = zarr.open_array(
-                self._reader(snapshot).store, path=place, mode='r'
-            )
+            array = zarr.open_array(self._reader(snapshot).store, path=place, mode="r")
             return {
-                'name': decode_name(place.split('/')[1]),
-                'ndim': array.ndim,
-                'dtype': str(array.dtype),
+                "name": decode_name(place.split("/")[1]),
+                "ndim": array.ndim,
+                "dtype": str(array.dtype),
             }
 
     # -- records ---------------------------------------------------------
@@ -132,12 +126,12 @@ class IcechunkStore:
     def append(self, record: Record) -> None:
         with self._lock:
             session = self._writable()
-            what = getattr(record, 'step', None) or record.id
+            what = getattr(record, "step", None) or record.id
             snapshot = session.commit(
-                message=f'{record.kind} {what}',
+                message=f"{record.kind} {what}",
                 metadata={
-                    'record': record.to_dict(),
-                    'places': dict(self._staged),
+                    "record": record.to_dict(),
+                    "places": dict(self._staged),
                 },
                 allow_empty=True,
             )
@@ -165,16 +159,14 @@ class IcechunkStore:
             return self._places[handle]
         if handle in self._staged:
             return None, self._staged[handle]
-        raise KeyError(f'{handle!r} is not a handle this store issued')
+        raise KeyError(f"{handle!r} is not a handle this store issued")
 
     def _reader(self, snapshot: str | None) -> Any:
         """A session to read one snapshot from, or the open write session."""
         if snapshot is None:
             return self._writable()
         if snapshot not in self._readers:
-            self._readers[snapshot] = self.repo.readonly_session(
-                snapshot_id=snapshot
-            )
+            self._readers[snapshot] = self.repo.readonly_session(snapshot_id=snapshot)
         return self._readers[snapshot]
 
     def _load(self) -> None:
@@ -182,19 +174,17 @@ class IcechunkStore:
         commits = reversed(list(self.repo.ancestry(branch=BRANCH)))
         for commit in commits:
             metadata = dict(commit.metadata)
-            record = metadata.get('record')
+            record = metadata.get("record")
             if record is not None:
                 self._records.append(from_dict(record))
-            for handle, place in dict(metadata.get('places', {})).items():
+            for handle, place in dict(metadata.get("places", {})).items():
                 self._places[handle] = (commit.id, place)
-                parts = place.split('/')
+                parts = place.split("/")
                 match = _VERSION.match(parts[2]) if len(parts) == 3 else None
                 if parts[0] == _ARRAYS and match is not None:
                     name = decode_name(parts[1])
-                    number = int(match['version'])
-                    self._versions[name] = max(
-                        self._versions.get(name, 0), number
-                    )
+                    number = int(match["version"])
+                    self._versions[name] = max(self._versions.get(name, 0), number)
 
     def _remember(self, array: object, handle: Handle) -> None:
         # A Python scalar cannot be weakly referenced; see SimpleStore.

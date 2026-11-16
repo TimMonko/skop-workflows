@@ -14,19 +14,19 @@ from typing import Any
 #: Opaque; issued by the store and parsed only by it.
 Handle = str
 
-RUN = 'run'
-ROOT = 'root'
+RUN = "run"
+ROOT = "root"
 
 #: A run's status. Only an ``ok`` run can become a step's current run: a
 #: cancelled op may hand back what it had computed so far, which is kept for
 #: inspection but never stands for the step.
-OK = 'ok'
-FAILED = 'failed'
-CANCELLED = 'cancelled'
-EDITED = 'edited'
-ACCEPTED = 'accepted'
-REVERTED = 'reverted'
-DETACHED = 'detached'
+OK = "ok"
+FAILED = "failed"
+CANCELLED = "cancelled"
+EDITED = "edited"
+ACCEPTED = "accepted"
+REVERTED = "reverted"
+DETACHED = "detached"
 
 
 @dataclass(frozen=True)
@@ -64,11 +64,11 @@ class Run:
         return RUN
 
     def to_dict(self) -> dict[str, Any]:
-        return {'kind': RUN, **self.__dict__}
+        return {"kind": RUN, **self.__dict__}
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> Run:
-        return cls(**{k: v for k, v in data.items() if k != 'kind'})
+        return cls(**{k: v for k, v in data.items() if k != "kind"})
 
 
 @dataclass(frozen=True)
@@ -89,11 +89,11 @@ class Root:
         return ROOT
 
     def to_dict(self) -> dict[str, Any]:
-        return {'kind': ROOT, **self.__dict__}
+        return {"kind": ROOT, **self.__dict__}
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> Root:
-        return cls(**{k: v for k, v in data.items() if k != 'kind'})
+        return cls(**{k: v for k, v in data.items() if k != "kind"})
 
 
 @dataclass(frozen=True)
@@ -114,11 +114,11 @@ class Detached:
         return DETACHED
 
     def to_dict(self) -> dict[str, Any]:
-        return {'kind': DETACHED, **self.__dict__}
+        return {"kind": DETACHED, **self.__dict__}
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> Detached:
-        return cls(**{k: v for k, v in data.items() if k != 'kind'})
+        return cls(**{k: v for k, v in data.items() if k != "kind"})
 
 
 @dataclass(frozen=True)
@@ -137,23 +137,23 @@ class Event:
 
     def to_dict(self) -> dict[str, Any]:
         return {
-            'id': self.id,
-            'kind': self.kind,
-            'run': self.run,
-            'note': self.note,
-            'handle': self.handle,
-            'output': self.output,
+            "id": self.id,
+            "kind": self.kind,
+            "run": self.run,
+            "note": self.note,
+            "handle": self.handle,
+            "output": self.output,
         }
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> Event:
         return cls(
-            id=data['id'],
-            kind=data['kind'],
-            run=data['run'],
-            note=data.get('note'),
-            handle=data.get('handle'),
-            output=data.get('output'),
+            id=data["id"],
+            kind=data["kind"],
+            run=data["run"],
+            note=data.get("note"),
+            handle=data.get("handle"),
+            output=data.get("output"),
         )
 
 
@@ -162,10 +162,10 @@ Record = Run | Root | Detached | Event
 
 
 def from_dict(data: dict[str, Any]) -> Record:
-    if data['kind'] == RUN:
+    if data["kind"] == RUN:
         return Run.from_dict(data)
-    if data['kind'] == ROOT:
+    if data["kind"] == ROOT:
         return Root.from_dict(data)
-    if data['kind'] == DETACHED:
+    if data["kind"] == DETACHED:
         return Detached.from_dict(data)
     return Event.from_dict(data)

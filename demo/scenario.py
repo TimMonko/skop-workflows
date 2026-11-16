@@ -24,18 +24,16 @@ def blobs(
     for _ in range(count):
         cy, cx = rng.uniform(16, shape[0] - 16), rng.uniform(16, shape[1] - 16)
         radius = rng.uniform(4, 9)
-        image += np.exp(
-            -((rows - cy) ** 2 + (cols - cx) ** 2) / (2 * radius**2)
-        )
+        image += np.exp(-((rows - cy) ** 2 + (cols - cx) ** 2) / (2 * radius**2))
     return image + rng.normal(0.0, 0.01, shape)
 
 
 def session(work: Path, name: str) -> Recorder:
     """A recorder in its own store under ``work``."""
-    return Recorder(SimpleStore(work / name), InProcess(), version='demo 0.1')
+    return Recorder(SimpleStore(work / name), InProcess(), version="demo 0.1")
 
 
-def build(work: Path, name: str = 'graph-demo') -> Recorder:
+def build(work: Path, name: str = "graph-demo") -> Recorder:
     """Record the demo's steps 1-7, ready to draw.
 
     Ends in the state the demo cares about: a sigma sweep with one current
@@ -44,18 +42,16 @@ def build(work: Path, name: str = 'graph-demo') -> Recorder:
     """
     recorder = session(work, name)
     image = blobs(seed=1)
-    recorder.root('image', image)
+    recorder.root("image", image)
     normalized = recorder.run(
-        percentile, 'normalized', {'image': image, 'low': 1.0, 'high': 99.8}
+        percentile, "normalized", {"image": image, "low": 1.0, "high": 99.8}
     )
-    recorder.run(gaussian, 'smoothed', {'image': normalized, 'sigma': 2.0})
-    recorder.run(gaussian, 'smoothed', {'image': normalized, 'sigma': 17.0})
-    smoothed = recorder.run(
-        gaussian, 'smoothed', {'image': normalized, 'sigma': 18.0}
-    )
-    labels = recorder.run(otsu, 'labels', {'image': smoothed})
-    recorder.run(connect, 'components', {'labels': labels})
-    recorder.run(gaussian, 'smoothed', {'image': normalized, 'sigma': 2.0})
-    recorder.mark_edited('labels', 'painted two cells')
-    recorder.run(gaussian, 'smoothed_alt', {'image': normalized, 'sigma': 9.0})
+    recorder.run(gaussian, "smoothed", {"image": normalized, "sigma": 2.0})
+    recorder.run(gaussian, "smoothed", {"image": normalized, "sigma": 17.0})
+    smoothed = recorder.run(gaussian, "smoothed", {"image": normalized, "sigma": 18.0})
+    labels = recorder.run(otsu, "labels", {"image": smoothed})
+    recorder.run(connect, "components", {"labels": labels})
+    recorder.run(gaussian, "smoothed", {"image": normalized, "sigma": 2.0})
+    recorder.mark_edited("labels", "painted two cells")
+    recorder.run(gaussian, "smoothed_alt", {"image": normalized, "sigma": 9.0})
     return recorder

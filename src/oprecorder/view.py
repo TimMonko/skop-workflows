@@ -15,49 +15,49 @@ from .graph import Graph
 from .record import Run
 
 #: The badge a node wears when nothing is wrong.
-FRESH = 'fresh'
+FRESH = "fresh"
 #: The other badges, in the order in which they outrank each other.
-STALE = 'stale'
-AFFECTED = 'affected'
-EDITED = 'edited'
-FAILED = 'failed'
+STALE = "stale"
+AFFECTED = "affected"
+EDITED = "edited"
+FAILED = "failed"
 #: The newest run was cancelled: what it handed back is kept, not used.
-CANCELLED = 'cancelled'
+CANCELLED = "cancelled"
 #: A step whose input's layer has gone. It is not stale -- there is nothing
 #: newer to catch up with -- so it ranks below the badges that ask for action.
-MISSING = 'missing'
+MISSING = "missing"
 #: A step whose hand edit was kept: its output is the user's pixels, and a
 #: recipe asks for them as a root. Nothing to do about it, so it ranks last.
-KEPT = 'kept'
+KEPT = "kept"
 
 #: A quick visual signal per badge, for graph labels and panels.
 SIGNALS = {
-    FRESH: '✅ fresh',
-    STALE: '⏳ stale',
-    AFFECTED: '⚠️ affected',
-    EDITED: '✏️ edited',
-    FAILED: '❌ failed',
-    CANCELLED: '⏹️ cancelled',
-    MISSING: '🕳️ input gone',
-    KEPT: '📌 kept edit',
+    FRESH: "✅ fresh",
+    STALE: "⏳ stale",
+    AFFECTED: "⚠️ affected",
+    EDITED: "✏️ edited",
+    FAILED: "❌ failed",
+    CANCELLED: "⏹️ cancelled",
+    MISSING: "🕳️ input gone",
+    KEPT: "📌 kept edit",
 }
 
 #: A fill and a stroke per badge, so every renderer agrees on what a badge
 #: looks like. The Mermaid flowchart and the napari widget both take these.
 COLOURS = {
-    FRESH: ('#e6f4ea', '#137333'),
-    STALE: ('#fef7e0', '#b06000'),
-    AFFECTED: ('#f3e8fd', '#8430ce'),
-    EDITED: ('#fce8e6', '#a50e0e'),
-    FAILED: ('#f1f3f4', '#5f6368'),
-    CANCELLED: ('#f1f3f4', '#5f6368'),
-    MISSING: ('#e3e8ef', '#475569'),
-    KEPT: ('#e0f2f1', '#00695c'),
+    FRESH: ("#e6f4ea", "#137333"),
+    STALE: ("#fef7e0", "#b06000"),
+    AFFECTED: ("#f3e8fd", "#8430ce"),
+    EDITED: ("#fce8e6", "#a50e0e"),
+    FAILED: ("#f1f3f4", "#5f6368"),
+    CANCELLED: ("#f1f3f4", "#5f6368"),
+    MISSING: ("#e3e8ef", "#475569"),
+    KEPT: ("#e0f2f1", "#00695c"),
 }
 
 #: A root is not a badge -- it never fails and never goes stale -- so it keeps
 #: a colour of its own.
-ROOT_COLOURS = ('#e8f0fe', '#1967d2')
+ROOT_COLOURS = ("#e8f0fe", "#1967d2")
 
 
 @dataclass(frozen=True)
@@ -146,9 +146,9 @@ def view(graph: Graph, targets: list[str] | None = None) -> GraphView:
         runs = graph.runs_of(step)
         current = graph.current(step)
         flags = []
-        if runs[-1].status == 'cancelled':
+        if runs[-1].status == "cancelled":
             flags.append(CANCELLED)
-        elif current is None or runs[-1].status != 'ok':
+        elif current is None or runs[-1].status != "ok":
             flags.append(FAILED)
         if graph.is_edited(step):
             flags.append(EDITED)
@@ -213,10 +213,7 @@ class Lineage:
             key == self.step
             or key in self.upstream
             or key in self.downstream
-            or (
-                key.startswith(ROOT_PREFIX)
-                and key[len(ROOT_PREFIX) :] in self.roots
-            )
+            or (key.startswith(ROOT_PREFIX) and key[len(ROOT_PREFIX) :] in self.roots)
         )
 
 
@@ -234,7 +231,7 @@ def lineage(graph: Graph, step: str) -> Lineage:
 #: A root's node key is its name behind this, so it cannot be mistaken for a
 #: step that happens to share the name -- and one often does: a layer called
 #: 'smoothed' is a root, and so is the step that made it.
-ROOT_PREFIX = 'root:'
+ROOT_PREFIX = "root:"
 
 
 @dataclass(frozen=True)
@@ -301,9 +298,7 @@ def layout(view: GraphView) -> Layout:
     for _ in range(len(pending) + 1):
         moved = False
         for step in pending:
-            sources = [
-                column.get(src, 0) for src, dst, _ in edges if dst == step
-            ]
+            sources = [column.get(src, 0) for src, dst, _ in edges if dst == step]
             depth = 1 + max(sources, default=0)
             if column.get(step) != depth:
                 column[step] = depth
@@ -320,10 +315,8 @@ def layout(view: GraphView) -> Layout:
         keys = by_column[col]
 
         def pull(key: str) -> float:
-            fed = [
-                row[src] for src, dst, _ in edges if dst == key and src in row
-            ]
-            return sum(fed) / len(fed) if fed else float('inf')
+            fed = [row[src] for src, dst, _ in edges if dst == key and src in row]
+            return sum(fed) / len(fed) if fed else float("inf")
 
         # sorted() is stable, so nodes with no one feeding them keep the order
         # the log gave them.
@@ -334,13 +327,11 @@ def layout(view: GraphView) -> Layout:
     for key, col in column.items():
         if key.startswith(ROOT_PREFIX):
             placed.append(
-                Placed(
-                    key, key[len(ROOT_PREFIX) :], 'root', None, col, row[key]
-                )
+                Placed(key, key[len(ROOT_PREFIX) :], "root", None, col, row[key])
             )
         else:
             node = steps[key]
-            placed.append(Placed(key, key, 'step', node.badge, col, row[key]))
+            placed.append(Placed(key, key, "step", node.badge, col, row[key]))
     placed.sort(key=lambda n: (n.col, n.row))
     return Layout(
         nodes=tuple(placed),

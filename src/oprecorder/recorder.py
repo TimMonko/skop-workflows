@@ -72,8 +72,8 @@ class Runner(Protocol):
 #: The run, and its step, that a nested call is made from. A context variable
 #: rather than an attribute: a workflow's calls happen on whichever thread the
 #: runner used, and two threads must not see each other's parent.
-_enclosing: contextvars.ContextVar[tuple[str, str] | None] = (
-    contextvars.ContextVar('skop_enclosing_run', default=None)
+_enclosing: contextvars.ContextVar[tuple[str, str] | None] = contextvars.ContextVar(
+    "skop_enclosing_run", default=None
 )
 
 #: What oprunner's runner takes besides the op's own arguments. Anything else
@@ -82,20 +82,20 @@ _enclosing: contextvars.ContextVar[tuple[str, str] | None] = (
 #: of this machine to use and where to put the result, not what was computed.
 _OPTIONS = frozenset(
     {
-        'variant',
-        'axes',
-        'plans',
-        'position',
-        'on_progress',
-        'on_start',
-        'memory',
-        'tiler',
-        'out',
+        "variant",
+        "axes",
+        "plans",
+        "position",
+        "on_progress",
+        "on_start",
+        "memory",
+        "tiler",
+        "out",
     }
 )
 #: The options that say *how* to run rather than who to tell: written into the
 #: run, and asked again when the step is run again.
-_RECORDED_OPTIONS = ('variant', 'axes', 'plans', 'position')
+_RECORDED_OPTIONS = ("variant", "axes", "plans", "position")
 
 
 def _new_id() -> str:
@@ -125,7 +125,7 @@ def outputs_of(
     if spec.form != FUNCTION:
         given = args or {}
         return {name: given[name] for name in names if name in given}
-    if getattr(result, '_fields', None) == names:
+    if getattr(result, "_fields", None) == names:
         return dict(zip(names, result, strict=True))
     if len(names) == 1:
         return {names[0]: result}
@@ -238,14 +238,14 @@ class Recorder:
             if name is None:
                 if len(run.outputs) != 1:
                     raise ValueError(
-                        f'{step!r} has outputs {sorted(run.outputs)}; say '
-                        f'which one the kept pixels replace'
+                        f"{step!r} has outputs {sorted(run.outputs)}; say "
+                        f"which one the kept pixels replace"
                     )
                 name = next(iter(run.outputs))
             elif name not in run.outputs:
-                raise KeyError(f'{step!r} has no output {name!r}')
+                raise KeyError(f"{step!r} has no output {name!r}")
             # The user's pixels, like a root's: held, not copied.
-            path = step if len(run.outputs) == 1 else f'{step}.{name}'
+            path = step if len(run.outputs) == 1 else f"{step}.{name}"
             handle = self.store.refer(path, array)
             output = name if len(run.outputs) > 1 else None
         event = Event(
@@ -300,7 +300,7 @@ class Recorder:
         for name, value in params.items():
             if not is_json(value):
                 raise TypeError(
-                    f'{name}={value!r} is not JSON, so it cannot be recorded'
+                    f"{name}={value!r} is not JSON, so it cannot be recorded"
                 )
         recorded = _recorded_options(options)
 
@@ -309,21 +309,21 @@ class Recorder:
         run_id = _new_id()
         enclosing = _enclosing.get()
         record = {
-            'id': run_id,
-            'step': step,
-            'op': spec.name,
-            'inputs': inputs,
-            'params': params,
-            'op_version': self.version,
-            'parent': enclosing[0] if enclosing else None,
-            'options': recorded,
-            'paths': paths,
+            "id": run_id,
+            "step": step,
+            "op": spec.name,
+            "inputs": inputs,
+            "params": params,
+            "op_version": self.version,
+            "parent": enclosing[0] if enclosing else None,
+            "options": recorded,
+            "paths": paths,
         }
         # The caller's cancel handle is watched on its way past, since an op
         # that is cancelled may stop early and return what it has so far --
         # which must not become the step's result.
         watched: list[_Watched] = []
-        asked = options.get('on_start')
+        asked = options.get("on_start")
 
         def on_start(task: Any) -> None:
             handed = _Watched(task)
@@ -331,10 +331,8 @@ class Recorder:
             if asked is not None:
                 asked(handed)
 
-        options['on_start'] = on_start
-        record['started'] = datetime.now(timezone.utc).isoformat(
-            timespec='seconds'
-        )
+        options["on_start"] = on_start
+        record["started"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
         clock = time.perf_counter()
         token = _enclosing.set((run_id, step))
         try:
@@ -350,7 +348,7 @@ class Recorder:
                 Run(
                     **record,
                     status=CANCELLED if cancelled else FAILED,
-                    error=f'{type(error).__name__}: {error}',
+                    error=f"{type(error).__name__}: {error}",
                     duration=_since(clock),
                 )
             )
@@ -382,8 +380,7 @@ class Recorder:
             now = graph.now(handle)
             if now is None:
                 raise KeyError(
-                    f'{step!r} read {name!r} from an output its source no '
-                    f'longer makes'
+                    f"{step!r} read {name!r} from an output its source no longer makes"
                 )
             args[name] = self.store.get(now)
         return self._again(fn, run, args)
@@ -396,9 +393,7 @@ class Recorder:
         the step (decision 3).
         """
         run = self._current_or_raise(step)
-        args = {
-            name: self.store.get(handle) for name, handle in run.inputs.items()
-        }
+        args = {name: self.store.get(handle) for name, handle in run.inputs.items()}
         return self._again(fn, run, args)
 
     def produce(
@@ -423,7 +418,7 @@ class Recorder:
             run = graph.current(step)
             fn = None if run is None else registry.get(run.op)
             if fn is None:
-                raise KeyError(f'cannot resolve the op of {step!r}')
+                raise KeyError(f"cannot resolve the op of {step!r}")
             self.update(fn, step)
             ran.append(step)
         return ran
@@ -475,11 +470,7 @@ class Recorder:
         found = {}
         for name in _array_params(spec):
             value = args.get(name)
-            handle = (
-                self.store.handle_of(value)
-                if isinstance(value, Array)
-                else None
-            )
+            handle = self.store.handle_of(value) if isinstance(value, Array) else None
             if handle is not None:
                 source = graph.source_of(handle)
                 if source is not None:
@@ -498,13 +489,13 @@ class Recorder:
             # Anything array-shaped, as scikit-ops' runner takes it -- dask,
             # zarr, xarray -- known by identity like a numpy array is.
             if not isinstance(value, Array):
-                raise TypeError(f'{spec.name} needs an array for {name!r}')
+                raise TypeError(f"{spec.name} needs an array for {name!r}")
             handle = self.store.handle_of(value)
             if handle is None:
                 raise MissingRoot(
-                    f'{name!r} has no handle. Put it in the store first, with '
-                    f'recorder.root(...): an array from nowhere is a root, and a '
-                    f'root that is not declared is a broken lineage.'
+                    f"{name!r} has no handle. Put it in the store first, with "
+                    f"recorder.root(...): an array from nowhere is a root, and a "
+                    f"root that is not declared is a broken lineage."
                 )
             found[name] = handle
         return found
@@ -518,7 +509,7 @@ class Recorder:
             ((name, value),) = values.items()
             return {name: self.store.put(step, value)}
         return {
-            name: self.store.put(f'{step}.{name}', value)
+            name: self.store.put(f"{step}.{name}", value)
             for name, value in values.items()
         }
 
@@ -531,7 +522,7 @@ class Recorder:
     def _current_or_raise(self, step: str, graph: Graph | None = None) -> Run:
         run = (graph or self.graph()).current(step)
         if run is None:
-            raise KeyError(f'no successful run of {step!r}')
+            raise KeyError(f"no successful run of {step!r}")
         return run
 
 
@@ -611,7 +602,7 @@ class RecordingRunner:
         graph = self.recorder.graph()
         base = self._step_for(spec, graph)
         if enclosing is not None:
-            base = f'{enclosing[1]}.{base}'
+            base = f"{enclosing[1]}.{base}"
         wanted = self.recorder.sources(spec, args)
         name, count = base, 1
         while name in graph.by_step:
@@ -619,7 +610,7 @@ class RecordingRunner:
             if last.op == spec.name and graph.sources_of(last) == wanted:
                 return name
             count += 1
-            name = f'{base}_{count}'
+            name = f"{base}_{count}"
         return name
 
 
@@ -655,11 +646,9 @@ def _recorded_options(options: Mapping[str, Any]) -> dict[str, Any]:
         value = options.get(key)
         if value is None:
             continue
-        if key == 'plans':
+        if key == "plans":
             value = {
-                name: plan.to_dict()
-                if isinstance(plan, AdaptationPlan)
-                else plan
+                name: plan.to_dict() if isinstance(plan, AdaptationPlan) else plan
                 for name, plan in value.items()
                 if not _changes_nothing(plan)
             }
@@ -667,9 +656,7 @@ def _recorded_options(options: Mapping[str, Any]) -> dict[str, Any]:
                 continue
         found[key] = to_json(value)
         if not is_json(found[key]):
-            raise TypeError(
-                f'{key}={value!r} is not JSON, so it cannot be recorded'
-            )
+            raise TypeError(f"{key}={value!r} is not JSON, so it cannot be recorded")
     return found
 
 
@@ -691,10 +678,10 @@ def _changes_nothing(plan: Any) -> bool:
 def _revived_options(options: Mapping[str, Any]) -> dict[str, Any]:
     """Recorded runner options, as a runner takes them again."""
     found = dict(options)
-    if 'plans' in found:
-        found['plans'] = {
+    if "plans" in found:
+        found["plans"] = {
             name: AdaptationPlan.from_dict(plan)
-            for name, plan in found['plans'].items()
+            for name, plan in found["plans"].items()
         }
     return found
 
@@ -702,7 +689,7 @@ def _revived_options(options: Mapping[str, Any]) -> dict[str, Any]:
 def _takes_function(param: Any) -> bool:
     """Whether a parameter is given a function rather than data."""
     return param.type in (collections.abc.Callable, typing.Callable) or bool(
-        getattr(param.choices, 'options', None)
+        getattr(param.choices, "options", None)
     )
 
 
@@ -747,7 +734,7 @@ def revive(
             continue
         if not isinstance(value, str) or not _takes_function(param):
             continue
-        options = getattr(param.choices, 'options', ())
+        options = getattr(param.choices, "options", ())
         named = {
             OpSpec.from_op(candidate).name: candidate
             for _, candidate in options
@@ -755,9 +742,7 @@ def revive(
         }
         fn = named.get(value) or (registry or {}).get(value)
         if fn is None:
-            raise KeyError(
-                f'{param.name}={value!r} is not an op this run can find'
-            )
+            raise KeyError(f"{param.name}={value!r} is not an op this run can find")
         found[param.name] = fn
     return found
 
@@ -773,9 +758,7 @@ def _declared_class(annotation: Any) -> type | None:
 def _path_params(spec: OpSpec) -> tuple[str, ...]:
     """The parameters that name a file rather than hold a value."""
     return tuple(
-        param.name
-        for param in spec.params
-        if type_spec(param.type).name == PATH
+        param.name for param in spec.params if type_spec(param.type).name == PATH
     )
 
 
@@ -796,7 +779,5 @@ def _array_params(spec: OpSpec) -> tuple[str, ...]:
     to know it was given a handle for it.
     """
     return tuple(
-        param.name
-        for param in spec.inputs
-        if type_spec(param.type).name == NDARRAY
+        param.name for param in spec.inputs if type_spec(param.type).name == NDARRAY
     )

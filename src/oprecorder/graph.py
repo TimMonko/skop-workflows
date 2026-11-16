@@ -181,7 +181,7 @@ class Graph:
         """
         root = self._root_of.get(handle)
         if root is not None:
-            return f'root:{root.name}'
+            return f"root:{root.name}"
         origin = self.origin(handle)
         return origin[0] if origin is not None else None
 
@@ -332,17 +332,13 @@ class Graph:
             run = self.current(step)
             if run is not None:
                 consumed.update(self._upstream_steps(run))
-        return [
-            s for s in self.steps() if s not in consumed and self.current(s)
-        ]
+        return [s for s in self.steps() if s not in consumed and self.current(s)]
 
 
 def _only(run: Run) -> str:
     """A run's one output, or a refusal naming the choice it needs."""
     if len(run.outputs) != 1:
-        raise ValueError(
-            f'{run.step!r} has outputs {sorted(run.outputs)}; say which'
-        )
+        raise ValueError(f"{run.step!r} has outputs {sorted(run.outputs)}; say which")
     return next(iter(run.outputs))
 
 

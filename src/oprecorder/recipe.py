@@ -39,9 +39,7 @@ class UnboundRoot(ValueError):
     """A replay was not given an input the recipe needs."""
 
 
-def export(
-    graph: Graph, targets: list[str] | None, store: Store
-) -> dict[str, Any]:
+def export(graph: Graph, targets: list[str] | None, store: Store) -> dict[str, Any]:
     """The closure of the targets, as a portable dict.
 
     ``targets`` defaults to the graph's leaves. Shapes and dtypes come from
@@ -56,14 +54,14 @@ def export(
     unknown = [t for t in wanted if t not in closure]
     if unknown:
         raise KeyError(
-            f'no successful run to export for {unknown}; a target must be a '
-            f'step that ran'
+            f"no successful run to export for {unknown}; a target must be a "
+            f"step that ran"
         )
     kept = [step for step in closure if graph.is_accepted(step)]
     if any(t in kept for t in wanted):
         raise ValueError(
-            f'{[t for t in wanted if t in kept]} hold pixels kept by hand, '
-            f'which a replay cannot produce; choose what reads them instead'
+            f"{[t for t in wanted if t in kept]} hold pixels kept by hand, "
+            f"which a replay cannot produce; choose what reads them instead"
         )
 
     roots: dict[str, dict[str, Any]] = {}
@@ -74,18 +72,18 @@ def export(
     def bind(name: str, handle: str, from_kept: bool) -> dict[str, str]:
         if name in roots and (name in kept_roots) != from_kept:
             raise ValueError(
-                f'{name!r} is both an input and a step whose edit was kept; '
-                f'rename one of them before exporting'
+                f"{name!r} is both an input and a step whose edit was kept; "
+                f"rename one of them before exporting"
             )
         if name not in roots:
             described = store.describe(handle)
             roots[name] = {
-                'ndim': described['ndim'],
-                'dtype': described['dtype'],
+                "ndim": described["ndim"],
+                "dtype": described["dtype"],
             }
             if from_kept:
                 kept_roots.add(name)
-        return {'root': name}
+        return {"root": name}
 
     def ref(handle: str) -> dict[str, str]:
         root = graph.root_of(handle)
@@ -93,16 +91,16 @@ def export(
             return bind(root.name, handle, from_kept=False)
         origin = graph.origin(handle)
         if origin is None:
-            raise ValueError(f'{handle!r} came from nowhere the log records')
+            raise ValueError(f"{handle!r} came from nowhere the log records")
         step, output = origin
         if graph.is_accepted(step):
             run = graph.current(step)
             assert run is not None
-            name = step if len(run.outputs) == 1 else f'{step}.{output}'
+            name = step if len(run.outputs) == 1 else f"{step}.{output}"
             latest = graph.latest(step, output)
             assert latest is not None
             return bind(name, latest, from_kept=True)
-        return {'step': step, 'output': output}
+        return {"step": step, "output": output}
 
     steps: dict[str, dict[str, Any]] = {}
     for step in closure:
@@ -114,27 +112,27 @@ def export(
         for param, path in run.paths.items():
             # A file is never carried: it is asked for, under a name of its
             # own, with the file's name as a hint (decision 6).
-            name = f'{step}.{param}'
-            roots[name] = {'path': PurePath(path).name}
-            inputs[param] = {'root': name}
+            name = f"{step}.{param}"
+            roots[name] = {"path": PurePath(path).name}
+            inputs[param] = {"root": name}
         entry: dict[str, Any] = {
-            'op': run.op,
-            'inputs': inputs,
-            'params': dict(run.params),
+            "op": run.op,
+            "inputs": inputs,
+            "params": dict(run.params),
         }
         if run.options:
-            entry['options'] = dict(run.options)
+            entry["options"] = dict(run.options)
         steps[step] = entry
 
     return {
-        'format': FORMAT,
-        'targets': wanted,
-        'roots': roots,
-        'steps': steps,
-        'caution': {
-            'edited': [s for s in steps if graph.is_edited(s)],
-            'affected': [s for s in steps if graph.is_affected(s)],
-            'kept': kept,
+        "format": FORMAT,
+        "targets": wanted,
+        "roots": roots,
+        "steps": steps,
+        "caution": {
+            "edited": [s for s in steps if graph.is_edited(s)],
+            "affected": [s for s in steps if graph.is_affected(s)],
+            "kept": kept,
         },
     }
 
@@ -143,25 +141,23 @@ def save(recipe: dict[str, Any], path: str | Path) -> None:
     """Write a recipe as pretty-printed JSON, for humans and diffs."""
     _check_format(recipe)
     text = json.dumps(recipe, indent=2, ensure_ascii=False)
-    Path(path).write_text(text + '\n', encoding='utf-8')
+    Path(path).write_text(text + "\n", encoding="utf-8")
 
 
 def load(path: str | Path) -> dict[str, Any]:
     """Read a recipe written by :func:`save`, refusing a format it is not."""
-    recipe = json.loads(Path(path).read_text(encoding='utf-8'))
+    recipe = json.loads(Path(path).read_text(encoding="utf-8"))
     _check_format(recipe)
     return recipe
 
 
-def plan(
-    recipe: dict[str, Any], targets: list[str] | None = None
-) -> list[str]:
+def plan(recipe: dict[str, Any], targets: list[str] | None = None) -> list[str]:
     """The recipe's steps needed for the targets, oldest first."""
     _check_format(recipe)
-    wanted = list(targets if targets is not None else recipe['targets'])
-    unknown = [t for t in wanted if t not in recipe['steps']]
+    wanted = list(targets if targets is not None else recipe["targets"])
+    unknown = [t for t in wanted if t not in recipe["steps"]]
     if unknown:
-        raise KeyError(f'not in this recipe: {unknown}')
+        raise KeyError(f"not in this recipe: {unknown}")
     order: list[str] = []
     seen: set[str] = set()
 
@@ -169,9 +165,9 @@ def plan(
         if step in seen:
             return
         seen.add(step)
-        for ref in recipe['steps'][step]['inputs'].values():
-            if 'step' in ref:
-                visit(ref['step'])
+        for ref in recipe["steps"][step]["inputs"].values():
+            if "step" in ref:
+                visit(ref["step"])
         order.append(step)
 
     for target in wanted:
@@ -245,88 +241,82 @@ class Prepared:
         _check_format(recipe)
         self.recipe = recipe
         self.registry = registry
-        self.targets = list(
-            targets if targets is not None else recipe['targets']
-        )
+        self.targets = list(targets if targets is not None else recipe["targets"])
         self.steps = plan(recipe, self.targets)
         missing = sorted(
             {
-                recipe['steps'][s]['op']
+                recipe["steps"][s]["op"]
                 for s in self.steps
-                if recipe['steps'][s]['op'] not in registry
+                if recipe["steps"][s]["op"] not in registry
             }
         )
         #: Why this cannot run, in words; empty when it can.
         self.problems: list[str] = [
-            f'no op {op!r} here: is the package that provides it installed?'
+            f"no op {op!r} here: is the package that provides it installed?"
             for op in missing
         ]
-        self.roots = [
-            self._need(name) for name in _roots_read(recipe, self.steps)
-        ]
+        self.roots = [self._need(name) for name in _roots_read(recipe, self.steps)]
 
     def _need(self, name: str) -> RootNeed:
-        hint = self.recipe['roots'].get(name, {})
+        hint = self.recipe["roots"].get(name, {})
         read_by = tuple(
             step
             for step in self.steps
             if any(
-                ref.get('root') == name
-                for ref in self.recipe['steps'][step]['inputs'].values()
+                ref.get("root") == name
+                for ref in self.recipe["steps"][step]["inputs"].values()
             )
         )
         roles: set[Role | None] = set()
         plannable = bool(read_by)
         for step in read_by:
-            entry = self.recipe['steps'][step]
-            fn = self.registry.get(entry['op'])
+            entry = self.recipe["steps"][step]
+            fn = self.registry.get(entry["op"])
             if fn is None:
                 plannable = False
                 continue
             by_name = {p.name: p for p in OpSpec.from_op(fn).params}
-            for param, ref in entry['inputs'].items():
-                if ref.get('root') == name and param in by_name:
+            for param, ref in entry["inputs"].items():
+                if ref.get("root") == name and param in by_name:
                     roles.add(by_name[param].role)
                     plannable = plannable and by_name[param].axes is not None
-        kept = self.recipe.get('caution', {}).get('kept', [])
+        kept = self.recipe.get("caution", {}).get("kept", [])
         kept_for = next(
-            (s for s in kept if name == s or name.startswith(f'{s}.')), None
+            (s for s in kept if name == s or name.startswith(f"{s}.")), None
         )
         return RootNeed(
             name=name,
-            ndim=hint.get('ndim'),
-            dtype=hint.get('dtype'),
+            ndim=hint.get("ndim"),
+            dtype=hint.get("dtype"),
             role=roles.pop() if len(roles) == 1 else None,
-            path_hint=hint.get('path'),
+            path_hint=hint.get("path"),
             kept_for=kept_for,
             read_by=read_by,
-            plannable=plannable and hint.get('ndim') is not None,
+            plannable=plannable and hint.get("ndim") is not None,
         )
 
     def check(self, roots: Mapping[str, Any]) -> None:
         """Everything a replay needs, verified before anything runs."""
         if self.problems:
-            raise MissingOp(' '.join(self.problems))
+            raise MissingOp(" ".join(self.problems))
         for need in self.roots:
             if need.name not in roots:
                 raise UnboundRoot(
-                    f'{need.name!r} is needed by {need.read_by[0]!r} and '
-                    f'was not supplied'
+                    f"{need.name!r} is needed by {need.read_by[0]!r} and "
+                    f"was not supplied"
                 )
             value = roots[need.name]
             if need.is_path:
                 if not isinstance(value, (str, os.PathLike)):
-                    raise UnboundRoot(
-                        f'{need.name!r} wants a path, got {value!r}'
-                    )
+                    raise UnboundRoot(f"{need.name!r} wants a path, got {value!r}")
                 continue
-            ndim = getattr(value, 'ndim', None)
+            ndim = getattr(value, "ndim", None)
             if ndim is None:
                 ndim = np.ndim(value)
             if not need.fits(ndim):
-                more = ' or more' if need.plannable else ''
+                more = " or more" if need.plannable else ""
                 raise UnboundRoot(
-                    f'{need.name!r} wants {need.ndim}{more} axes, got {ndim}'
+                    f"{need.name!r} wants {need.ndim}{more} axes, got {ndim}"
                 )
 
     def run(
@@ -378,9 +368,7 @@ class Prepared:
         overrides = dict(overrides or {})
         stray = sorted(set(overrides) - set(self.steps))
         if stray:
-            raise KeyError(
-                f'overrides for steps this replay does not run: {stray}'
-            )
+            raise KeyError(f"overrides for steps this replay does not run: {stray}")
         self.check(roots)
         name_step = name_step or _default_namer(recorder)
 
@@ -404,27 +392,25 @@ class Prepared:
             if cancelled is not None and cancelled():
                 done.cancelled = True
                 break
-            entry = self.recipe['steps'][step]
-            fn = self.registry[entry['op']]
+            entry = self.recipe["steps"][step]
+            fn = self.registry[entry["op"]]
             spec = OpSpec.from_op(fn)
             args: dict[str, Any] = {}
-            for param, ref in entry['inputs'].items():
-                if 'root' in ref:
-                    args[param] = bound[ref['root']]
+            for param, ref in entry["inputs"].items():
+                if "root" in ref:
+                    args[param] = bound[ref["root"]]
                 else:
-                    args[param] = outputs[ref['step']][ref['output']]
-            args.update(entry['params'])
+                    args[param] = outputs[ref["step"]][ref["output"]]
+            args.update(entry["params"])
             args.update(overrides.get(step, {}))
             session_step = name_step(step, spec, args)
             if on_step is not None:
                 on_step(index, total, step, session_step)
-            asked = {**_revived_options(entry.get('options', {})), **options}
-            plans, planned = _fit_plans(
-                fn, spec, args, asked.get('plans'), named
-            )
-            asked.pop('plans', None)
+            asked = {**_revived_options(entry.get("options", {})), **options}
+            plans, planned = _fit_plans(fn, spec, args, asked.get("plans"), named)
+            asked.pop("plans", None)
             if plans:
-                asked['plans'] = plans
+                asked["plans"] = plans
             if planned:
                 done.planned[step] = {
                     param: plan.summary for param, plan in planned.items()
@@ -492,7 +478,7 @@ def _fit_plans(
     planned: dict[str, AdaptationPlan] = {}
     for param in spec.params:
         value = args.get(param.name)
-        if param.axes is None or value is None or not hasattr(value, 'shape'):
+        if param.axes is None or value is None or not hasattr(value, "shape"):
             continue
         ndim = len(value.shape)
         kept = plans.get(param.name)
@@ -524,7 +510,7 @@ def _default_namer(
             if last.op == spec.name and graph.sources_of(last) == wanted:
                 return candidate
             count += 1
-            candidate = f'{step}_{count}'
+            candidate = f"{step}_{count}"
         return candidate
 
     return name
@@ -550,40 +536,40 @@ def batch(
     outcomes = []
     for name, roots in items:
         outcome: dict[str, Any] = {
-            'name': name,
-            'ok': True,
-            'error': None,
-            'recorder': None,
+            "name": name,
+            "ok": True,
+            "error": None,
+            "recorder": None,
         }
         try:
-            outcome['recorder'] = make_recorder(name)
-            replay(recipe, roots, outcome['recorder'], registry, targets)
+            outcome["recorder"] = make_recorder(name)
+            replay(recipe, roots, outcome["recorder"], registry, targets)
         except Exception as error:  # noqa: BLE001 -- report each, keep going
-            outcome.update(ok=False, error=f'{type(error).__name__}: {error}')
+            outcome.update(ok=False, error=f"{type(error).__name__}: {error}")
         outcomes.append(outcome)
-        if stop_on_failure and not outcome['ok']:
+        if stop_on_failure and not outcome["ok"]:
             break
     return outcomes
 
 
 def _check_format(recipe: Mapping[str, Any]) -> None:
-    found = recipe.get('format')
+    found = recipe.get("format")
     if found != FORMAT:
         raise ValueError(
-            f'this is a recipe of format {found!r}; this version reads '
-            f'format {FORMAT} only'
+            f"this is a recipe of format {found!r}; this version reads "
+            f"format {FORMAT} only"
         )
 
 
 def _is_path(recipe: Mapping[str, Any], root: str) -> bool:
-    return 'path' in recipe['roots'].get(root, {})
+    return "path" in recipe["roots"].get(root, {})
 
 
 def _roots_read(recipe: dict[str, Any], steps: list[str]) -> list[str]:
     """The roots the given steps read, in the order they are first read."""
     found: list[str] = []
     for step in steps:
-        for ref in recipe['steps'][step]['inputs'].values():
-            if 'root' in ref and ref['root'] not in found:
-                found.append(ref['root'])
+        for ref in recipe["steps"][step]["inputs"].values():
+            if "root" in ref and ref["root"] not in found:
+                found.append(ref["root"])
     return found

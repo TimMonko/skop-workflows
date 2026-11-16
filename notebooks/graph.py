@@ -12,7 +12,7 @@ closure, the rule export uses.
 
 import marimo
 
-app = marimo.App(width='medium')
+app = marimo.App(width="medium")
 
 
 @app.cell
@@ -27,7 +27,7 @@ def _():
     import sys
     from pathlib import Path
 
-    demo = Path(__file__).resolve().parents[1] / 'demo'
+    demo = Path(__file__).resolve().parents[1] / "demo"
     if str(demo) not in sys.path:
         sys.path.insert(0, str(demo))
     return (Path,)
@@ -42,7 +42,7 @@ def _(Path):
     from oprecorder.mermaid import to_mermaid
     from oprecorder.view import SIGNALS, view
 
-    work = Path(tempfile.mkdtemp(prefix='skop-graph-'))
+    work = Path(tempfile.mkdtemp(prefix="skop-graph-"))
     recorder = build(work)
     everything = view(recorder.graph())
     return (SIGNALS, everything, recorder, to_mermaid, view)
@@ -55,7 +55,7 @@ def _(mo):
     import matplotlib
     import numpy as np
 
-    matplotlib.use('Agg')
+    matplotlib.use("Agg")
 
     from matplotlib import pyplot as plt
 
@@ -67,16 +67,16 @@ def _(mo):
         step = max(1, max(data.shape) // 256)
         data = data[::step, ::step]
         if np.issubdtype(data.dtype, np.floating):
-            colormap = 'magma'
+            colormap = "magma"
         elif np.issubdtype(data.dtype, np.bool_):
-            colormap = 'gray'
+            colormap = "gray"
         else:
-            colormap = 'turbo'
+            colormap = "turbo"
         figure, axes = plt.subplots(figsize=(1.4, 1.4), dpi=90)
-        axes.imshow(data, cmap=colormap, interpolation='nearest')
+        axes.imshow(data, cmap=colormap, interpolation="nearest")
         axes.set_axis_off()
         buffer = BytesIO()
-        figure.savefig(buffer, format='png', bbox_inches='tight', pad_inches=0)
+        figure.savefig(buffer, format="png", bbox_inches="tight", pad_inches=0)
         plt.close(figure)
         return mo.image(buffer.getvalue(), width=96)
 
@@ -87,7 +87,7 @@ def _(mo):
 def _(everything, mo):
     targets = mo.ui.multiselect(
         options=[node.step for node in everything.nodes],
-        label='targets (empty = whole session; chosen = their closure)',
+        label="targets (empty = whole session; chosen = their closure)",
     )
     targets
     return (targets,)
@@ -107,7 +107,7 @@ def _(mo, recorder, targets, to_mermaid, view):
 def _(mo, picture):
     picker = mo.ui.dropdown(
         options=[node.step for node in picture.nodes],
-        label='inspect a step',
+        label="inspect a step",
     )
     picker
     return (picker,)
@@ -119,14 +119,12 @@ def _(SIGNALS, mo, picture, picker):
         (n for n in picture.nodes if n.step == picker.value),
         picture.nodes[0],
     )
-    flags = (
-        ' · '.join(SIGNALS[flag] for flag in node.flags) or SIGNALS['fresh']
-    )
+    flags = " · ".join(SIGNALS[flag] for flag in node.flags) or SIGNALS["fresh"]
     count = len(node.runs)
     header = mo.md(
-        f'### {node.step}\n'
-        f'`{node.op}`\n\n'
-        f'{flags} · {count} run{"" if count == 1 else "s"}'
+        f"### {node.step}\n"
+        f"`{node.op}`\n\n"
+        f"{flags} · {count} run{'' if count == 1 else 's'}"
     )
     return (header, node)
 
@@ -142,9 +140,9 @@ def _(header, mo, node, recorder, thumbnail):
                     mo.vstack(
                         [
                             thumbnail(recorder.store.get(edge.handle)),
-                            mo.md(f'`{edge.param}` · in'),
+                            mo.md(f"`{edge.param}` · in"),
                         ],
-                        align='center',
+                        align="center",
                     )
                 )
         for name, handle in current.outputs.items():
@@ -152,15 +150,13 @@ def _(header, mo, node, recorder, thumbnail):
                 mo.vstack(
                     [
                         thumbnail(recorder.store.get(handle)),
-                        mo.md(f'`{name}` · out'),
+                        mo.md(f"`{name}` · out"),
                     ],
-                    align='center',
+                    align="center",
                 )
             )
-    row = (
-        mo.hstack(previews, gap=1, justify='start') if previews else mo.md('')
-    )
-    panel = mo.vstack([header, row], align='start')
+    row = mo.hstack(previews, gap=1, justify="start") if previews else mo.md("")
+    panel = mo.vstack([header, row], align="start")
     return (panel,)
 
 
@@ -171,11 +167,11 @@ def _(mo, node):
     table = mo.ui.table(
         [
             {
-                'run': run.id,
-                'current': run.current,
-                'status': run.status,
-                'params': json.dumps(run.params),
-                'error': run.error or '',
+                "run": run.id,
+                "current": run.current,
+                "status": run.status,
+                "params": json.dumps(run.params),
+                "error": run.error or "",
             }
             for run in node.runs
         ],
@@ -187,8 +183,8 @@ def _(mo, node):
 @app.cell
 def _(diagram, mo, panel, table):
     mo.hstack(
-        [diagram, mo.vstack([panel, table], align='stretch')],
+        [diagram, mo.vstack([panel, table], align="stretch")],
         widths=[1, 1],
-        align='start',
+        align="start",
     )
     return

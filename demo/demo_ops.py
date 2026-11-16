@@ -28,21 +28,17 @@ def percentile(
 ) -> ImageOf[np.ndarray]:
     """Rescale so that two percentiles land on 0 and 1."""
     if image.ndim != 2:
-        raise ValueError(
-            f'percentile takes a 2-D image, got {image.ndim} axes'
-        )
+        raise ValueError(f"percentile takes a 2-D image, got {image.ndim} axes")
     lo, hi = np.percentile(image, [low, high])
     span = hi - lo or 1.0
     return np.clip((image - lo) / span, 0.0, 1.0)
 
 
 @op()
-def gaussian(
-    image: ImageOf[np.ndarray], sigma: float = 2.0
-) -> ImageOf[np.ndarray]:
+def gaussian(image: ImageOf[np.ndarray], sigma: float = 2.0) -> ImageOf[np.ndarray]:
     """Blur with a Gaussian kernel, one axis at a time."""
     if sigma <= 0:
-        raise ValueError(f'sigma must be positive, got {sigma}')
+        raise ValueError(f"sigma must be positive, got {sigma}")
     kernel = _kernel(sigma)
     out = image.astype(float)
     for axis in range(out.ndim):
@@ -51,9 +47,7 @@ def gaussian(
 
 
 @op()
-def otsu(
-    image: ImageOf[np.ndarray], invert: bool = False
-) -> LabelsOf[np.ndarray]:
+def otsu(image: ImageOf[np.ndarray], invert: bool = False) -> LabelsOf[np.ndarray]:
     """Keep what lies above Otsu's threshold."""
     flat = np.asarray(image, dtype=float).ravel()
     counts, edges = np.histogram(flat, bins=256)
@@ -110,8 +104,8 @@ def smooth_then_threshold(
     whichever runner started the workflow is the one that runs them -- which
     is how a recorder, standing where the runner stood, sees both.
     """
-    smoothed = run(gaussian, {'image': image, 'sigma': sigma})
-    return run(otsu, {'image': smoothed})
+    smoothed = run(gaussian, {"image": image, "sigma": sigma})
+    return run(otsu, {"image": smoothed})
 
 
 @op()
@@ -120,14 +114,14 @@ def blur_then_threshold(
     blur: Annotated[Callable, Choices(gaussian=gaussian)] = gaussian,
 ) -> LabelsOf[np.ndarray]:
     """A workflow that is handed an op: which blur to use is a parameter."""
-    return run(otsu, {'image': run(blur, {'image': image})})
+    return run(otsu, {"image": run(blur, {"image": image})})
 
 
 class Direction(Enum):
     """Which way to flip: an enum, which is not JSON until it is recorded."""
 
-    rows = 'rows'
-    cols = 'cols'
+    rows = "rows"
+    cols = "cols"
 
 
 @op()
@@ -138,7 +132,7 @@ def flip(
     return np.flip(image, 0 if direction is Direction.rows else 1)
 
 
-@op(env='demo')
+@op(env="demo")
 def sharpen(image: ImageOf[np.ndarray]) -> ImageOf[np.ndarray]:
     """A stand-in for an op that names an environment, not a workflow.
 
@@ -162,9 +156,7 @@ def _kernel(sigma: float) -> np.ndarray:
 def _convolve(array: np.ndarray, kernel: np.ndarray, axis: int) -> np.ndarray:
     moved = np.moveaxis(array, axis, -1)
     pad = len(kernel) // 2
-    padded = np.pad(
-        moved, [(0, 0)] * (moved.ndim - 1) + [(pad, pad)], mode='edge'
-    )
+    padded = np.pad(moved, [(0, 0)] * (moved.ndim - 1) + [(pad, pad)], mode="edge")
     out = np.zeros_like(moved)
     for index, weight in enumerate(kernel):
         out += weight * padded[..., index : index + moved.shape[-1]]

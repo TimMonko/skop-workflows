@@ -26,22 +26,22 @@ import numpy as np
 
 from .record import Handle, Record, from_dict
 
-_HANDLE = re.compile(r'^(?P<path>.+)@v(?P<version>\d+)$')
+_HANDLE = re.compile(r"^(?P<path>.+)@v(?P<version>\d+)$")
 
 #: What may stand for itself in a stored name; everything else is escaped.
 #: Lower case only, because Windows and macOS do not tell 'Image' from
 #: 'image', and no dot, so that no name is ever '.' or '..'.
-_PLAIN = frozenset('abcdefghijklmnopqrstuvwxyz0123456789_-')
+_PLAIN = frozenset("abcdefghijklmnopqrstuvwxyz0123456789_-")
 #: Names Windows will not create a file or folder under.
 _RESERVED = frozenset(
-    {'con', 'prn', 'aux', 'nul'}
-    | {f'com{i}' for i in range(10)}
-    | {f'lpt{i}' for i in range(10)}
+    {"con", "prn", "aux", "nul"}
+    | {f"com{i}" for i in range(10)}
+    | {f"lpt{i}" for i in range(10)}
 )
 
 
 def _escape(char: str) -> str:
-    return ''.join(f'%{byte:02X}' for byte in char.encode('utf-8'))
+    return "".join(f"%{byte:02X}" for byte in char.encode("utf-8"))
 
 
 def encode_name(name: str) -> str:
@@ -55,9 +55,9 @@ def encode_name(name: str) -> str:
     with two underscores.
     """
     if not name:
-        raise ValueError('a stored name cannot be empty')
-    out = ''.join(c if c in _PLAIN else _escape(c) for c in name)
-    if out in _RESERVED or out.startswith('__'):
+        raise ValueError("a stored name cannot be empty")
+    out = "".join(c if c in _PLAIN else _escape(c) for c in name)
+    if out in _RESERVED or out.startswith("__"):
         out = _escape(out[0]) + out[1:]
     return out
 
@@ -77,7 +77,7 @@ def as_storable(value: Any) -> np.ndarray:
     array = np.asarray(value)
     if array.dtype == object:
         raise TypeError(
-            f'{type(value).__name__} is not an array, so it cannot be stored'
+            f"{type(value).__name__} is not an array, so it cannot be stored"
         )
     return array
 
@@ -110,15 +110,14 @@ class References:
         self._lock = threading.RLock()
 
     def refer(self, name: str, value: Any) -> Handle:
-        shape = getattr(value, 'shape', None)
-        if shape is None or getattr(value, 'dtype', None) is None:
+        shape = getattr(value, "shape", None)
+        if shape is None or getattr(value, "dtype", None) is None:
             raise TypeError(
-                f'{type(value).__name__} is not an array, so it cannot be a '
-                f'root'
+                f"{type(value).__name__} is not an array, so it cannot be a root"
             )
         if not name:
-            raise ValueError('a root name cannot be empty')
-        handle = f'{name}@ref-{uuid.uuid4().hex[:10]}'
+            raise ValueError("a root name cannot be empty")
+        handle = f"{name}@ref-{uuid.uuid4().hex[:10]}"
         with self._lock:
             previous = self._newest.get(name)
             if previous is not None and previous in self._strong:
@@ -130,9 +129,9 @@ class References:
             self._strong[handle] = value
             self._newest[name] = handle
             self._described[handle] = {
-                'name': name,
-                'ndim': len(shape),
-                'dtype': str(np.dtype(value.dtype)),
+                "name": name,
+                "ndim": len(shape),
+                "dtype": str(np.dtype(value.dtype)),
             }
         return handle
 
@@ -147,10 +146,9 @@ class References:
         found = ref() if ref is not None else None
         if found is None:
             raise KeyError(
-                f'{handle!r} was held by reference, and its data is no longer '
-                f'alive'
+                f"{handle!r} was held by reference, and its data is no longer alive"
                 if handle in self._described
-                else f'{handle!r} is not a handle this store issued'
+                else f"{handle!r} is not a handle this store issued"
             )
         return found
 
@@ -198,8 +196,8 @@ class SimpleStore:
 
     def __init__(self, root: str | Path) -> None:
         self.root = Path(root)
-        (self.root / 'arrays').mkdir(parents=True, exist_ok=True)
-        self.log_path = self.root / 'log.jsonl'
+        (self.root / "arrays").mkdir(parents=True, exist_ok=True)
+        self.log_path = self.root / "log.jsonl"
         self._ids: dict[int, tuple[weakref.ref, Handle]] = {}
         self._lock = threading.RLock()
         self._records: list[Record] | None = None
@@ -215,7 +213,7 @@ class SimpleStore:
             target = self._array_path(path, version)
             target.parent.mkdir(parents=True, exist_ok=True)
             np.save(target, stored, allow_pickle=False)
-            handle = f'{path}@v{version}'
+            handle = f"{path}@v{version}"
             self._remember(array, handle)
             return handle
 
@@ -229,7 +227,7 @@ class SimpleStore:
             return self._refs.get(handle)
         target = self._array_path(*self._split(handle))
         if not target.is_file():
-            raise KeyError(f'{handle!r} is not a handle this store issued')
+            raise KeyError(f"{handle!r} is not a handle this store issued")
         array = np.load(target)
         self._remember(array, handle)
         return array
@@ -246,11 +244,11 @@ class SimpleStore:
         if self._refs.knows(handle):
             return self._refs.describe(handle)
         path, version = self._split(handle)
-        array = np.load(self._array_path(path, version), mmap_mode='r')
-        return {'name': path, 'ndim': array.ndim, 'dtype': str(array.dtype)}
+        array = np.load(self._array_path(path, version), mmap_mode="r")
+        return {"name": path, "ndim": array.ndim, "dtype": str(array.dtype)}
 
     def versions(self, path: str) -> list[Handle]:
-        return [f'{path}@v{v}' for v in self._versions(path)]
+        return [f"{path}@v{v}" for v in self._versions(path)]
 
     # -- records ---------------------------------------------------------
 
@@ -258,8 +256,8 @@ class SimpleStore:
         line = json.dumps(record.to_dict())
         with self._lock:
             records = self._loaded()
-            with self.log_path.open('a', encoding='utf-8') as stream:
-                stream.write(line + '\n')
+            with self.log_path.open("a", encoding="utf-8") as stream:
+                stream.write(line + "\n")
             records.append(record)
 
     def records(self) -> list[Record]:
@@ -271,7 +269,7 @@ class SimpleStore:
     def _loaded(self) -> list[Record]:
         if self._records is None:
             lines = (
-                self.log_path.read_text(encoding='utf-8').splitlines()
+                self.log_path.read_text(encoding="utf-8").splitlines()
                 if self.log_path.exists()
                 else []
             )
@@ -281,19 +279,19 @@ class SimpleStore:
         return self._records
 
     def _array_path(self, path: str, version: int) -> Path:
-        return self.root / 'arrays' / encode_name(path) / f'v{version}.npy'
+        return self.root / "arrays" / encode_name(path) / f"v{version}.npy"
 
     def _versions(self, path: str) -> list[int]:
-        folder = self.root / 'arrays' / encode_name(path)
+        folder = self.root / "arrays" / encode_name(path)
         if not folder.is_dir():
             return []
-        return sorted(int(p.stem[1:]) for p in folder.glob('v*.npy'))
+        return sorted(int(p.stem[1:]) for p in folder.glob("v*.npy"))
 
     def _split(self, handle: Handle) -> tuple[str, int]:
         match = _HANDLE.match(handle)
         if match is None:
-            raise KeyError(f'{handle!r} is not a handle this store issued')
-        return match['path'], int(match['version'])
+            raise KeyError(f"{handle!r} is not a handle this store issued")
+        return match["path"], int(match["version"])
 
     def _remember(self, array: object, handle: Handle) -> None:
         # A Python scalar cannot be weakly referenced, and nothing reads one

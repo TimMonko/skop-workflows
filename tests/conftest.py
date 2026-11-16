@@ -17,11 +17,11 @@ try:  # the Icechunk backend is an optional extra
 except ImportError:  # pragma: no cover - depends on the environment
     IcechunkStore = None
 
-BACKENDS = ['simple'] + (['icechunk'] if IcechunkStore is not None else [])
+BACKENDS = ["simple"] + (["icechunk"] if IcechunkStore is not None else [])
 
 
 def open_store(kind: str, path: Path):
-    if kind == 'simple':
+    if kind == "simple":
         return SimpleStore(path)
     assert IcechunkStore is not None
     return IcechunkStore(path)
@@ -34,12 +34,12 @@ def backend(request) -> str:
 
 @pytest.fixture
 def store(backend, tmp_path):
-    return open_store(backend, tmp_path / 'store')
+    return open_store(backend, tmp_path / "store")
 
 
 @pytest.fixture
 def recorder(store) -> Recorder:
-    return Recorder(store, InProcess(), version='test')
+    return Recorder(store, InProcess(), version="test")
 
 
 @pytest.fixture

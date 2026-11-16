@@ -20,17 +20,13 @@ from opspec.types import ImageOf, LabelsOf, Out
 
 
 @op()
-def blur(
-    image: ImageOf[np.ndarray], sigma: float = 1.0
-) -> ImageOf[np.ndarray]:
+def blur(image: ImageOf[np.ndarray], sigma: float = 1.0) -> ImageOf[np.ndarray]:
     """A stand-in for a smoothing op: deterministic, and depends on sigma."""
     return np.asarray(image, dtype=float) * 0.5 + sigma
 
 
-@op(env='minimal')
-def worker_blur(
-    image: ImageOf[np.ndarray], sigma: float = 1.0
-) -> ImageOf[np.ndarray]:
+@op(env="minimal")
+def worker_blur(image: ImageOf[np.ndarray], sigma: float = 1.0) -> ImageOf[np.ndarray]:
     """``blur`` as an op that names an environment.
 
     The recorder hands such an op to its inner runner; one that names none
@@ -41,9 +37,7 @@ def worker_blur(
 
 
 @op()
-def threshold(
-    image: ImageOf[np.ndarray], level: float = 0.5
-) -> LabelsOf[np.ndarray]:
+def threshold(image: ImageOf[np.ndarray], level: float = 0.5) -> LabelsOf[np.ndarray]:
     """A mask of what lies above a level."""
     return (np.asarray(image) > level).astype(np.uint8)
 
@@ -91,7 +85,7 @@ def scale_into(
     factor: float = 2.0,
 ) -> None:
     """Computer form: fill a buffer the caller allocated."""
-    np.multiply(image, factor, out=result, casting='unsafe')
+    np.multiply(image, factor, out=result, casting="unsafe")
 
 
 @op()
@@ -112,7 +106,7 @@ def same(image: ImageOf[np.ndarray]) -> ImageOf[np.ndarray]:
 @op()
 def broken(image: ImageOf[np.ndarray]) -> ImageOf[np.ndarray]:
     """Always fails."""
-    raise RuntimeError('broken on purpose')
+    raise RuntimeError("broken on purpose")
 
 
 @op()
@@ -120,19 +114,19 @@ def blur_then_threshold(
     image: ImageOf[np.ndarray], sigma: float = 1.0
 ) -> LabelsOf[np.ndarray]:
     """A workflow: it calls two ops through the ambient runner."""
-    blurred = run(blur, {'image': image, 'sigma': sigma})
-    return run(threshold, {'image': blurred, 'level': 1.0})
+    blurred = run(blur, {"image": image, "sigma": sigma})
+    return run(threshold, {"image": blurred, "level": 1.0})
 
 
 @op()
 def split_workflow(image: ImageOf[np.ndarray]) -> Split:
     """A workflow with two outputs, made by a nested op."""
-    return run(split, {'image': image})
+    return run(split, {"image": image})
 
 
 class Mode(Enum):
-    fast = 'fast'
-    slow = 'slow'
+    fast = "fast"
+    slow = "slow"
 
 
 #: What ``configured`` was last called with.
@@ -141,7 +135,7 @@ last_call: dict = {}
 
 @op()
 def configured(
-    image: ImageOf[np.ndarray], mode: Mode = Mode.fast, model: Path = Path('m')
+    image: ImageOf[np.ndarray], mode: Mode = Mode.fast, model: Path = Path("m")
 ) -> ImageOf[np.ndarray]:
     """An enum and a path: neither is JSON until it is recorded."""
     last_call.update(mode=mode, model=model)
@@ -150,7 +144,7 @@ def configured(
 
 @op()
 def plane(
-    image: Annotated[ImageOf[np.ndarray], Axes('y', 'x')],
+    image: Annotated[ImageOf[np.ndarray], Axes("y", "x")],
 ) -> ImageOf[np.ndarray]:
     """A strictly 2-D op, so a stack has to be planned onto it."""
     assert np.ndim(image) == 2
