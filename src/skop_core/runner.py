@@ -30,6 +30,7 @@ from pathlib import Path, PurePath
 from typing import Any, Protocol, Union, get_args, get_origin
 
 import numpy as np
+from oprunner import InProcess
 from opspec.describe import NDARRAY, PATH, OpSpec, type_spec
 from opspec.op import FUNCTION, is_op
 from opspec.plan import AdaptationPlan
@@ -67,34 +68,6 @@ class Runner(Protocol):
 
     def run(self, fn: Callable, args: dict, **options: Any) -> Any: ...
 
-
-class InProcess:
-    """The simplest runner: call the function here.
-
-    It has no worker to report from and no task to cancel, so progress and
-    cancel handles are accepted and ignored. Axis plans are honoured, the way
-    scikit-ops' worker honours them, so a step recorded with a plan comes out
-    the same shape when it is replayed here.
-    """
-
-    def run(self, fn: Callable, args: dict, **options: Any) -> Any:
-        plans = dict(options.get('plans') or {})
-        for name, labels in (options.get('axes') or {}).items():
-            if name not in plans:
-                from opspec.plan import plan
-
-                plans[name] = plan(
-                    fn, name, args[name], labels, options.get('position')
-                )
-        if not plans:
-            return fn(**args)
-        from oprunner._adapt import execute
-
-        return execute(OpSpec.from_op(fn), fn, dict(args), plans)
-
-
-#: Where a workflow is called: this process.
-_HERE = InProcess()
 
 #: The run, and its step, that a nested call is made from. A context variable
 #: rather than an attribute: a workflow's calls happen on whichever thread the
@@ -173,7 +146,7 @@ class Recorder:
     store
         Where arrays and records go.
     inner
-        The runner that executes; :class:`InProcess` when none is given.
+        The runner that executes; ``oprunner.InProcess`` when none is given.
     version
         What ran: the package version, and the git commit for a checkout.
     step_for
@@ -191,7 +164,7 @@ class Recorder:
         step_for: Callable[[OpSpec, Graph], str] | None = None,
     ) -> None:
         self.store = store
-        self.inner = inner or InProcess()
+        self.inner = inner or InProcess()  # oprunner's
         #: Where an op ID is turned back into the function it names, when the
         #: op's own parameter does not say. A host that has a registry sets it.
         self.registry: Mapping[str, Callable] | None = None
@@ -365,12 +338,11 @@ class Recorder:
         clock = time.perf_counter()
         token = _enclosing.set((run_id, step))
         try:
-            with self._nested(spec, through, options):
-                # A workflow runs here, on the host, whatever the inner
-                # runner is: the calls it makes are what go to that runner,
-                # through the recorder bound above.
-                runner = _HERE if spec.is_workflow else self.inner
-                result = runner.run(fn, args, **options)
+            with self._nested(spec, through):
+                # The inner runner runs a workflow here and sends the calls
+                # it makes through the recorder bound above (oprunner's
+                # bound_runner), with the caller's progress, cancel and tiler.
+                result = self.inner.run(fn, args, **options)
             outputs = self._save(spec, step, result, args)
         except Exception as error:  # noqa: BLE001 -- a failed run is recorded
             cancelled = any(handed.cancelled for handed in watched)
@@ -471,30 +443,26 @@ class Recorder:
 
     @contextlib.contextmanager
     def _nested(
-        self,
-        spec: OpSpec,
-        through: RecordingRunner | None,
-        options: dict[str, Any],
+        self, spec: OpSpec, through: RecordingRunner | None
     ) -> typing.Generator[None]:
-        """Make the recorder ambient while a workflow runs, so its calls are
-        recorded; an op that is not a workflow calls nothing, and needs none.
+        """Bind the recorder while a workflow runs, so its calls are recorded;
+        an op that is not a workflow calls nothing, and needs none.
 
-        The caller's progress and cancel handles go to the ambient, whose task
-        scikit-ops' runner then uses for the workflow itself as well as for
-        what it calls: one task, so the caller hears everything and a cancel
-        reaches both the workflow and the sub-op it is waiting on.
+        Only the runner is bound. The caller's progress and cancel handles go
+        to the inner runner with the call, which makes one task of them for
+        the workflow and for what it calls, so the caller hears everything
+        and a cancel reaches both the workflow and the sub-op it waits on.
         """
         if not spec.is_workflow:
             yield
             return
-        from .ambient import ambient
+        from opspec.runtime import bind_runner, unbind_runner
 
-        with ambient(
-            through or RecordingRunner(self),
-            options.pop('on_progress', None),
-            options.pop('on_start', None),
-        ):
+        token = bind_runner(through or RecordingRunner(self))
+        try:
             yield
+        finally:
+            unbind_runner(token)
 
     def sources(self, spec: OpSpec, args: dict[str, Any]) -> dict[str, str]:
         """Where each array argument comes from, as the graph names it.

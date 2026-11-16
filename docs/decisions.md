@@ -334,3 +334,16 @@ Promoted decisions move into [`adr/`](adr/); their numbers stay here.
     calls. Asking upstream to leave a bound runner alone would make this
     unnecessary. (Refines 16 and 54; settles review item 1 of 2026-10-07
     for this repo.)
+67. **The inner runner runs workflows too; the recorder only binds
+    itself.** Two oprunner changes, proposed upstream on 2026-11-15, make
+    66's workaround unnecessary: `opspec.runtime.bound_runner()`, which
+    `Runner._run_here` asks before binding, so a workflow's calls go
+    through a runner already bound around it; and a public
+    `oprunner.InProcess`, which replaces this repo's own (and its
+    `oprunner._adapt` import), honours plans for an op with no environment,
+    and relays a workflow's sub-op progress. The recorder now hands every op
+    to the inner runner and, for a workflow, binds itself with
+    `bind_runner` alone: the caller's progress and cancel go to the inner
+    runner with the call, which keeps the tiler a caller gives a workflow.
+    Needs opspec and oprunner releases with those changes; until then, run
+    against a scikit-ops checkout. (Supersedes 66.)
